@@ -12,7 +12,10 @@ import (
 	"time"
 )
 
-var ErrUnauthorized = errors.New("unauthorized")
+var (
+	ErrUnauthorized           = errors.New("unauthorized")
+	ErrPasswordChangeRequired = errors.New("password change required")
+)
 
 type Client struct {
 	http *http.Client
@@ -111,6 +114,9 @@ func (c *Client) do(ctx context.Context, method, path, session string, body any,
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusUnauthorized {
 		return ErrUnauthorized
+	}
+	if resp.StatusCode == http.StatusForbidden {
+		return ErrPasswordChangeRequired
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		limited, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
