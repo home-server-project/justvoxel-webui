@@ -50,7 +50,7 @@ func TestUnauthenticatedDashboardRedirects(t *testing.T) {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "https://example/", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example/", nil)
 	app.Handler().ServeHTTP(rr, req)
 	if rr.Code != http.StatusSeeOther {
 		t.Fatalf("got %d", rr.Code)
@@ -60,13 +60,13 @@ func TestUnauthenticatedDashboardRedirects(t *testing.T) {
 	}
 }
 
-func TestLoginSetsSecureSession(t *testing.T) {
-	app, err := New(&fakeAPI{}, Config{Version: "1.0.0", ManagementAPI: "v1"})
+func TestLoginSetsLocalHTTPSession(t *testing.T) {
+	app, err := New(&fakeAPI{}, Config{Version: "1.0.0", ManagementAPI: "v1", ExternalScheme: "http"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	form := strings.NewReader("username=admin&password=secret")
-	req := httptest.NewRequest(http.MethodPost, "https://example/login", form)
+	req := httptest.NewRequest(http.MethodPost, "http://example/login", form)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	app.Handler().ServeHTTP(rr, req)
@@ -77,13 +77,36 @@ func TestLoginSetsSecureSession(t *testing.T) {
 	for _, c := range rr.Result().Cookies() {
 		if c.Name == sessionCookie {
 			found = true
-			if !c.Secure || !c.HttpOnly || c.SameSite != http.SameSiteStrictMode {
-				t.Fatalf("session cookie is not hardened: %#v", c)
+			if c.Secure || !c.HttpOnly || c.SameSite != http.SameSiteStrictMode {
+				t.Fatalf("local HTTP session cookie has unexpected security attributes: %#v", c)
 			}
 		}
 	}
 	if !found {
 		t.Fatal("session cookie not set")
+	}
+}
+
+func TestCSRFRequiresSameHTTPOrigin(t *testing.T) {
+	app, err := New(&fakeAPI{}, Config{ExternalScheme: "http"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	makeRequest := func(origin string) *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "http://example/logout", strings.NewReader("csrf=token"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Origin", origin)
+		req.AddCookie(&http.Cookie{Name: csrfCookie, Value: "token"})
+		return req
+	}
+	if !app.validCSRF(makeRequest("http://example")) {
+		t.Fatal("same-origin HTTP CSRF token was rejected")
+	}
+	if app.validCSRF(makeRequest("https://example")) {
+		t.Fatal("cross-scheme origin was accepted")
+	}
+	if app.validCSRF(makeRequest("http://other.example")) {
+		t.Fatal("cross-host origin was accepted")
 	}
 }
 
@@ -93,7 +116,7 @@ func TestFirstLoginRequiresPasswordChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	form := strings.NewReader("username=admin&password=secret")
-	req := httptest.NewRequest(http.MethodPost, "https://example/login", form)
+	req := httptest.NewRequest(http.MethodPost, "http://example/login", form)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	app.Handler().ServeHTTP(rr, req)
@@ -107,7 +130,7 @@ func TestDashboardRendersStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "https://example/", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example/", nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: "session-token"})
 	rr := httptest.NewRecorder()
 	app.Handler().ServeHTTP(rr, req)

@@ -29,9 +29,11 @@ type API interface {
 }
 
 type Config struct {
-	Version       string
-	Commit        string
-	ManagementAPI string
+	Version        string
+	Commit         string
+	ManagementAPI  string
+	ExternalScheme string
+	SecureCookies  bool
 }
 
 type App struct {
@@ -52,6 +54,9 @@ type pageData struct {
 }
 
 func New(client API, cfg Config) (*App, error) {
+	if cfg.ExternalScheme == "" {
+		cfg.ExternalScheme = "http"
+	}
 	t, err := template.ParseFS(assets, "templates/*.html")
 	if err != nil {
 		return nil, err
@@ -76,7 +81,7 @@ func (a *App) Handler() http.Handler {
 	return securityHeaders(mux)
 }
 
-func (a *App) ListenAndServeTLS(addr, certFile, keyFile string) error {
+func (a *App) ListenAndServe(addr string) error {
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           a.Handler(),
@@ -85,7 +90,7 @@ func (a *App) ListenAndServeTLS(addr, certFile, keyFile string) error {
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	return srv.ListenAndServeTLS(certFile, keyFile)
+	return srv.ListenAndServe()
 }
 
 func (a *App) health(w http.ResponseWriter, _ *http.Request) {
@@ -136,26 +141,26 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not create session", http.StatusInternalServerError)
 		return
 	}
-	setCookie(w, sessionCookie, result.Session, true)
-	setCookie(w, csrfCookie, csrf, false)
+	a.setCookie(w, sessionCookie, result.Session, true)
+	a.setCookie(w, csrfCookie, csrf, false)
 	if result.MustChange {
-		setCookie(w, mustChangeCookie, "1", true)
+		a.setCookie(w, mustChangeCookie, "1", true)
 		http.Redirect(w, r, "/password", http.StatusSeeOther)
 		return
 	}
-	clearCookie(w, mustChangeCookie, true)
+	a.clearCookie(w, mustChangeCookie, true)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (a *App) logout(w http.ResponseWriter, r *http.Request) {
-	if !validCSRF(r) {
+	if !a.validCSRF(r) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return
 	}
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
 		_ = a.api.Logout(r.Context(), c.Value)
 	}
-	clearSessionCookies(w)
+	a.clearSessionCookies(w)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
@@ -169,7 +174,7 @@ func (a *App) passwordPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) passwordChange(w http.ResponseWriter, r *http.Request) {
-	if !validCSRF(r) {
+	if !a.validCSRF(r) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return
 	}
@@ -188,7 +193,7 @@ func (a *App) passwordChange(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.api.ChangePassword(r.Context(), session, currentPassword, newPassword); err != nil {
 		if errors.Is(err, api.ErrUnauthorized) {
-			clearSessionCookies(w)
+			a.clearSessionCookies(w)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -196,7 +201,7 @@ func (a *App) passwordChange(w http.ResponseWriter, r *http.Request) {
 		a.render(w, "password.html", pageData{Title: "Change password", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI, CSRF: csrfFromRequest(r), Error: "Password change was rejected."})
 		return
 	}
-	clearSessionCookies(w)
+	a.clearSessionCookies(w)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
@@ -217,7 +222,7 @@ func (a *App) dashboard(w http.ResponseWriter, r *http.Request) {
 	status, err := a.api.Status(r.Context(), session)
 	if err != nil {
 		if errors.Is(err, api.ErrUnauthorized) {
-			clearSessionCookies(w)
+			a.clearSessionCookies(w)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -263,21 +268,21 @@ func randomToken(bytes int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-func setCookie(w http.ResponseWriter, name, value string, httpOnly bool) {
-	http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: "/", Secure: true, HttpOnly: httpOnly, SameSite: http.SameSiteStrictMode, MaxAge: 43200})
+func (a *App) setCookie(w http.ResponseWriter, name, value string, httpOnly bool) {
+	http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: "/", Secure: a.config.SecureCookies, HttpOnly: httpOnly, SameSite: http.SameSiteStrictMode, MaxAge: 43200})
 }
 
-func clearCookie(w http.ResponseWriter, name string, httpOnly bool) {
-	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", Secure: true, HttpOnly: httpOnly, SameSite: http.SameSiteStrictMode, MaxAge: -1})
+func (a *App) clearCookie(w http.ResponseWriter, name string, httpOnly bool) {
+	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", Secure: a.config.SecureCookies, HttpOnly: httpOnly, SameSite: http.SameSiteStrictMode, MaxAge: -1})
 }
 
-func clearSessionCookies(w http.ResponseWriter) {
-	clearCookie(w, sessionCookie, true)
-	clearCookie(w, csrfCookie, false)
-	clearCookie(w, mustChangeCookie, true)
+func (a *App) clearSessionCookies(w http.ResponseWriter) {
+	a.clearCookie(w, sessionCookie, true)
+	a.clearCookie(w, csrfCookie, false)
+	a.clearCookie(w, mustChangeCookie, true)
 }
 
-func validCSRF(r *http.Request) bool {
+func (a *App) validCSRF(r *http.Request) bool {
 	cookie, err := r.Cookie(csrfCookie)
 	if err != nil || cookie.Value == "" || r.FormValue("csrf") != cookie.Value {
 		return false
@@ -290,7 +295,7 @@ func validCSRF(r *http.Request) bool {
 	if err != nil || u.Host != r.Host {
 		return false
 	}
-	return u.Scheme == "https"
+	return u.Scheme == a.config.ExternalScheme
 }
 
 func securityHeaders(next http.Handler) http.Handler {

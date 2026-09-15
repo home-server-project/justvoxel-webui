@@ -12,10 +12,8 @@ import (
 )
 
 func main() {
-	listen := flag.String("listen", "0.0.0.0:8443", "HTTPS listen address")
+	listen := flag.String("listen", "0.0.0.0:8099", "HTTP listen address")
 	socket := flag.String("agent-socket", "/run/justvoxel/management.sock", "JustVoxel management Unix socket")
-	cert := flag.String("tls-cert", "/run/credentials/justvoxel-webui.service/tls.crt", "TLS certificate path")
-	key := flag.String("tls-key", "/run/credentials/justvoxel-webui.service/tls.key", "TLS private key path")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -26,16 +24,18 @@ func main() {
 
 	client := api.NewClient(*socket)
 	app, err := server.New(client, server.Config{
-		Version:       version.Version,
-		Commit:        version.Commit,
-		ManagementAPI: version.ManagementAPI,
+		Version:        version.Version,
+		Commit:         version.Commit,
+		ManagementAPI:  version.ManagementAPI,
+		ExternalScheme: "http",
+		SecureCookies:  false,
 	})
 	if err != nil {
 		log.Fatalf("initialize web server: %v", err)
 	}
 
-	log.Printf("JustVoxel WebUI %s listening on %s", version.Version, *listen)
-	if err := app.ListenAndServeTLS(*listen, *cert, *key); err != nil {
+	log.Printf("JustVoxel WebUI %s listening on http://%s", version.Version, *listen)
+	if err := app.ListenAndServe(*listen); err != nil {
 		log.Printf("web server stopped: %v", err)
 		os.Exit(1)
 	}
