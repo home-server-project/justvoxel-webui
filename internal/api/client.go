@@ -31,13 +31,13 @@ type Status struct {
 		IPv4    string `json:"ipv4"`
 	} `json:"system"`
 	Minecraft struct {
-		State      string `json:"state"`
-		Players    int    `json:"players"`
-		MaxPlayers int    `json:"max_players"`
-		Version    string `json:"version"`
-		JavaPort   int    `json:"java_port"`
-		Bedrock    bool   `json:"bedrock"`
-		BedrockPort int   `json:"bedrock_port"`
+		State       string `json:"state"`
+		Players     int    `json:"players"`
+		MaxPlayers  int    `json:"max_players"`
+		Version     string `json:"version"`
+		JavaPort    int    `json:"java_port"`
+		Bedrock     bool   `json:"bedrock"`
+		BedrockPort int    `json:"bedrock_port"`
 	} `json:"minecraft"`
 	Backup struct {
 		Enabled bool   `json:"enabled"`
