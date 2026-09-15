@@ -31,7 +31,20 @@ jobs:
             exit 1
           fi
           version="${tag#v}"
-          if [[ "${tag}" == *-* ]]; then prerelease=true; else prerelease=false; fi
+          git fetch --no-tags origin main testing
+          if [[ "${tag}" == *-* ]]; then
+            prerelease=true
+            git merge-base --is-ancestor "${GITHUB_SHA}" origin/testing || {
+              echo 'Prerelease tags must point to a commit reachable from testing.' >&2
+              exit 1
+            }
+          else
+            prerelease=false
+            git merge-base --is-ancestor "${GITHUB_SHA}" origin/main || {
+              echo 'Stable tags must point to a commit reachable from main.' >&2
+              exit 1
+            }
+          fi
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
       - name: Test
@@ -57,14 +70,24 @@ jobs:
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: 'v3.1.2'
-      - name: Sign checksum
+      - name: Sign and verify checksum
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "${COSIGN_PRIVATE_KEY:-}"
-          cosign sign-blob -y --key env://COSIGN_PRIVATE_KEY --output-signature dist/SHA256SUMS.sig dist/SHA256SUMS
+          cosign sign-blob -y \
+            --new-bundle-format=false \
+            --use-signing-config=false \
+            --key env://COSIGN_PRIVATE_KEY \
+            --output-signature dist/SHA256SUMS.sig \
+            dist/SHA256SUMS
+          cosign verify-blob \
+            --new-bundle-format=false \
+            --key cosign.pub \
+            --signature dist/SHA256SUMS.sig \
+            dist/SHA256SUMS >/dev/null
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
