@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -15,13 +16,15 @@ import (
 )
 
 const (
-	sessionCookie = "jv_session"
-	csrfCookie    = "jv_csrf"
+	sessionCookie    = "jv_session"
+	csrfCookie       = "jv_csrf"
+	mustChangeCookie = "jv_must_change"
 )
 
 type API interface {
 	Login(ctx context.Context, username, password string) (api.LoginResponse, error)
 	Logout(ctx context.Context, session string) error
+	ChangePassword(ctx context.Context, session, currentPassword, newPassword string) error
 	Status(ctx context.Context, session string) (api.Status, error)
 }
 
@@ -67,6 +70,8 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /login", a.loginPage)
 	mux.HandleFunc("POST /login", a.login)
 	mux.HandleFunc("POST /logout", a.logout)
+	mux.HandleFunc("GET /password", a.passwordPage)
+	mux.HandleFunc("POST /password", a.passwordChange)
 	mux.HandleFunc("GET /", a.dashboard)
 	return securityHeaders(mux)
 }
@@ -92,7 +97,11 @@ func (a *App) health(w http.ResponseWriter, _ *http.Request) {
 func (a *App) loginPage(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
 		if _, err := a.api.Status(r.Context(), c.Value); err == nil {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+			if mustChange(r) {
+				http.Redirect(w, r, "/password", http.StatusSeeOther)
+			} else {
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+			}
 			return
 		}
 	}
@@ -129,6 +138,12 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 	}
 	setCookie(w, sessionCookie, result.Session, true)
 	setCookie(w, csrfCookie, csrf, false)
+	if result.MustChange {
+		setCookie(w, mustChangeCookie, "1", true)
+		http.Redirect(w, r, "/password", http.StatusSeeOther)
+		return
+	}
+	clearCookie(w, mustChangeCookie, true)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -140,14 +155,58 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
 		_ = a.api.Logout(r.Context(), c.Value)
 	}
-	clearCookie(w, sessionCookie, true)
-	clearCookie(w, csrfCookie, false)
+	clearSessionCookies(w)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+func (a *App) passwordPage(w http.ResponseWriter, r *http.Request) {
+	if _, ok := sessionFromRequest(r); !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	csrf := csrfFromRequest(r)
+	a.render(w, "password.html", pageData{Title: "Change password", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI, CSRF: csrf})
+}
+
+func (a *App) passwordChange(w http.ResponseWriter, r *http.Request) {
+	if !validCSRF(r) {
+		http.Error(w, "invalid CSRF token", http.StatusForbidden)
+		return
+	}
+	session, ok := sessionFromRequest(r)
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	currentPassword := r.FormValue("current_password")
+	newPassword := r.FormValue("new_password")
+	confirmPassword := r.FormValue("confirm_password")
+	if newPassword != confirmPassword || len(newPassword) < 12 || len(newPassword) > 128 {
+		w.WriteHeader(http.StatusBadRequest)
+		a.render(w, "password.html", pageData{Title: "Change password", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI, CSRF: csrfFromRequest(r), Error: "New password must match and be 12 to 128 characters."})
+		return
+	}
+	if err := a.api.ChangePassword(r.Context(), session, currentPassword, newPassword); err != nil {
+		if errors.Is(err, api.ErrUnauthorized) {
+			clearSessionCookies(w)
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		a.render(w, "password.html", pageData{Title: "Change password", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI, CSRF: csrfFromRequest(r), Error: "Password change was rejected."})
+		return
+	}
+	clearCookie(w, mustChangeCookie, true)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (a *App) dashboard(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
+		return
+	}
+	if mustChange(r) {
+		http.Redirect(w, r, "/password", http.StatusSeeOther)
 		return
 	}
 	session, ok := sessionFromRequest(r)
@@ -158,19 +217,14 @@ func (a *App) dashboard(w http.ResponseWriter, r *http.Request) {
 	status, err := a.api.Status(r.Context(), session)
 	if err != nil {
 		if errors.Is(err, api.ErrUnauthorized) {
-			clearCookie(w, sessionCookie, true)
-			clearCookie(w, csrfCookie, false)
+			clearSessionCookies(w)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 		http.Error(w, "management service unavailable", http.StatusBadGateway)
 		return
 	}
-	csrf := ""
-	if c, err := r.Cookie(csrfCookie); err == nil {
-		csrf = c.Value
-	}
-	a.render(w, "dashboard.html", pageData{Title: "Dashboard", Version: a.config.Version, Commit: a.config.Commit, ManagementAPI: a.config.ManagementAPI, CSRF: csrf, Status: status})
+	a.render(w, "dashboard.html", pageData{Title: "Dashboard", Version: a.config.Version, Commit: a.config.Commit, ManagementAPI: a.config.ManagementAPI, CSRF: csrfFromRequest(r), Status: status})
 }
 
 func (a *App) render(w http.ResponseWriter, name string, data pageData) {
@@ -189,6 +243,18 @@ func sessionFromRequest(r *http.Request) (string, bool) {
 	return c.Value, true
 }
 
+func csrfFromRequest(r *http.Request) string {
+	if c, err := r.Cookie(csrfCookie); err == nil {
+		return c.Value
+	}
+	return ""
+}
+
+func mustChange(r *http.Request) bool {
+	c, err := r.Cookie(mustChangeCookie)
+	return err == nil && c.Value == "1"
+}
+
 func randomToken(bytes int) (string, error) {
 	buf := make([]byte, bytes)
 	if _, err := rand.Read(buf); err != nil {
@@ -205,12 +271,26 @@ func clearCookie(w http.ResponseWriter, name string, httpOnly bool) {
 	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", Secure: true, HttpOnly: httpOnly, SameSite: http.SameSiteStrictMode, MaxAge: -1})
 }
 
+func clearSessionCookies(w http.ResponseWriter) {
+	clearCookie(w, sessionCookie, true)
+	clearCookie(w, csrfCookie, false)
+	clearCookie(w, mustChangeCookie, true)
+}
+
 func validCSRF(r *http.Request) bool {
 	cookie, err := r.Cookie(csrfCookie)
-	if err != nil || cookie.Value == "" {
+	if err != nil || cookie.Value == "" || r.FormValue("csrf") != cookie.Value {
 		return false
 	}
-	return r.FormValue("csrf") == cookie.Value
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host != r.Host {
+		return false
+	}
+	return u.Scheme == "https"
 }
 
 func securityHeaders(next http.Handler) http.Handler {

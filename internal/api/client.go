@@ -71,6 +71,13 @@ func (c *Client) Logout(ctx context.Context, session string) error {
 	return c.do(ctx, http.MethodPost, "/v1/auth/logout", session, nil, nil)
 }
 
+func (c *Client) ChangePassword(ctx context.Context, session, currentPassword, newPassword string) error {
+	return c.do(ctx, http.MethodPost, "/v1/auth/password", session, map[string]string{
+		"current_password": currentPassword,
+		"new_password":     newPassword,
+	}, nil)
+}
+
 func (c *Client) Status(ctx context.Context, session string) (Status, error) {
 	var out Status
 	err := c.do(ctx, http.MethodGet, "/v1/status", session, nil, &out)

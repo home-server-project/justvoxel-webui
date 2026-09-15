@@ -10,16 +10,26 @@ import (
 	"github.com/home-server-project/justvoxel-webui/internal/api"
 )
 
-type fakeAPI struct{ authenticated bool }
+type fakeAPI struct {
+	authenticated bool
+	mustChange    bool
+}
 
 func (f *fakeAPI) Login(_ context.Context, username, password string) (api.LoginResponse, error) {
 	if username == "admin" && password == "secret" {
 		f.authenticated = true
-		return api.LoginResponse{Session: "session-token", ManagementAPI: "v1"}, nil
+		return api.LoginResponse{Session: "session-token", ManagementAPI: "v1", MustChange: f.mustChange}, nil
 	}
 	return api.LoginResponse{}, api.ErrUnauthorized
 }
 func (f *fakeAPI) Logout(_ context.Context, _ string) error { f.authenticated = false; return nil }
+func (f *fakeAPI) ChangePassword(_ context.Context, session, currentPassword, newPassword string) error {
+	if session != "session-token" || currentPassword != "secret" || len(newPassword) < 12 {
+		return api.ErrUnauthorized
+	}
+	f.mustChange = false
+	return nil
+}
 func (f *fakeAPI) Status(_ context.Context, session string) (api.Status, error) {
 	if session != "session-token" {
 		return api.Status{}, api.ErrUnauthorized
@@ -74,6 +84,21 @@ func TestLoginSetsSecureSession(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("session cookie not set")
+	}
+}
+
+func TestFirstLoginRequiresPasswordChange(t *testing.T) {
+	app, err := New(&fakeAPI{mustChange: true}, Config{Version: "1.0.0", ManagementAPI: "v1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := strings.NewReader("username=admin&password=secret")
+	req := httptest.NewRequest(http.MethodPost, "https://example/login", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/password" {
+		t.Fatalf("expected password redirect, got %d %q", rr.Code, rr.Header().Get("Location"))
 	}
 }
 
