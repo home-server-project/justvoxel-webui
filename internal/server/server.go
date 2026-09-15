@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -117,6 +118,10 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		a.render(w, "login.html", pageData{Title: "Sign in", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI, Error: msg})
 		return
 	}
+	if result.ManagementAPI != "" && result.ManagementAPI != a.config.ManagementAPI {
+		http.Error(w, "management API compatibility mismatch", http.StatusServiceUnavailable)
+		return
+	}
 	csrf, err := randomToken(32)
 	if err != nil {
 		http.Error(w, "could not create session", http.StatusInternalServerError)
@@ -178,7 +183,10 @@ func (a *App) render(w http.ResponseWriter, name string, data pageData) {
 
 func sessionFromRequest(r *http.Request) (string, bool) {
 	c, err := r.Cookie(sessionCookie)
-	return c.Value, err == nil && c.Value != ""
+	if err != nil || c.Value == "" {
+		return "", false
+	}
+	return c.Value, true
 }
 
 func randomToken(bytes int) (string, error) {
