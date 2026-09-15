@@ -196,8 +196,8 @@ func (a *App) passwordChange(w http.ResponseWriter, r *http.Request) {
 		a.render(w, "password.html", pageData{Title: "Change password", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI, CSRF: csrfFromRequest(r), Error: "Password change was rejected."})
 		return
 	}
-	clearCookie(w, mustChangeCookie, true)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	clearSessionCookies(w)
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 func (a *App) dashboard(w http.ResponseWriter, r *http.Request) {
