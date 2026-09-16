@@ -26,6 +26,8 @@ type API interface {
 	Logout(ctx context.Context, session string) error
 	ChangePassword(ctx context.Context, session, currentPassword, newPassword string) error
 	Status(ctx context.Context, session string) (api.Status, error)
+	Players(ctx context.Context, session string) (api.Players, error)
+	MinecraftAction(ctx context.Context, session, action string, confirmPlayers bool) (api.MinecraftActionResponse, error)
 }
 
 type Config struct {
@@ -44,13 +46,21 @@ type App struct {
 }
 
 type pageData struct {
-	Title         string
-	Version       string
-	Commit        string
-	ManagementAPI string
-	Error         string
-	CSRF          string
-	Status        api.Status
+	Title            string
+	Version          string
+	Commit           string
+	ManagementAPI    string
+	Error            string
+	Message          string
+	CSRF             string
+	Status           api.Status
+	Players          api.Players
+	ConfirmAction    string
+	ConfirmLabel     string
+	ConfirmOperation string
+	ConfirmProgress  string
+	ConfirmOnline    int
+	ConfirmPlayers   []string
 }
 
 func New(client API, cfg Config) (*App, error) {
@@ -77,6 +87,9 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("POST /logout", a.logout)
 	mux.HandleFunc("GET /password", a.passwordPage)
 	mux.HandleFunc("POST /password", a.passwordChange)
+	mux.HandleFunc("POST /minecraft/start", a.minecraftAction("start"))
+	mux.HandleFunc("POST /minecraft/stop", a.minecraftAction("stop"))
+	mux.HandleFunc("POST /minecraft/restart", a.minecraftAction("restart"))
 	mux.HandleFunc("GET /", a.dashboard)
 	return securityHeaders(mux)
 }
@@ -219,17 +232,153 @@ func (a *App) dashboard(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	status, err := a.api.Status(r.Context(), session)
+	data, err := a.dashboardData(r.Context(), session, csrfFromRequest(r))
 	if err != nil {
-		if errors.Is(err, api.ErrUnauthorized) {
+		a.handleDashboardError(w, r, err)
+		return
+	}
+	data.Message = actionResultMessage(r.URL.Query().Get("result"))
+	a.render(w, "dashboard.html", data)
+}
+
+func (a *App) minecraftAction(action string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !a.validCSRF(r) {
+			http.Error(w, "invalid CSRF token", http.StatusForbidden)
+			return
+		}
+		session, ok := sessionFromRequest(r)
+		if !ok {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		confirmPlayers := r.FormValue("confirm_players") == "yes"
+		result, actionErr := a.api.MinecraftAction(r.Context(), session, action, confirmPlayers)
+		if errors.Is(actionErr, api.ErrUnauthorized) {
 			a.clearSessionCookies(w)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
-		http.Error(w, "management service unavailable", http.StatusBadGateway)
+		if errors.Is(actionErr, api.ErrPasswordChangeRequired) {
+			http.Redirect(w, r, "/password", http.StatusSeeOther)
+			return
+		}
+		if actionErr == nil && result.ConfirmationRequired {
+			data, err := a.dashboardData(r.Context(), session, csrfFromRequest(r))
+			if err != nil {
+				a.handleDashboardError(w, r, err)
+				return
+			}
+			data.ConfirmAction = action
+			data.ConfirmLabel = actionLabel(action)
+			data.ConfirmOperation = actionOperation(action)
+			data.ConfirmProgress = actionProgress(action)
+			data.ConfirmOnline = result.Online
+			data.ConfirmPlayers = result.Players
+			a.render(w, "dashboard.html", data)
+			return
+		}
+		if actionErr != nil {
+			data, err := a.dashboardData(r.Context(), session, csrfFromRequest(r))
+			if err != nil {
+				a.handleDashboardError(w, r, err)
+				return
+			}
+			if result.Message != "" {
+				data.Error = result.Message
+			} else {
+				data.Error = "Minecraft operation failed."
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			a.render(w, "dashboard.html", data)
+			return
+		}
+		http.Redirect(w, r, "/?result="+action, http.StatusSeeOther)
+	}
+}
+
+func (a *App) dashboardData(ctx context.Context, session, csrf string) (pageData, error) {
+	status, err := a.api.Status(ctx, session)
+	if err != nil {
+		return pageData{}, err
+	}
+	players, err := a.api.Players(ctx, session)
+	if err != nil {
+		if errors.Is(err, api.ErrUnauthorized) || errors.Is(err, api.ErrPasswordChangeRequired) {
+			return pageData{}, err
+		}
+		players = api.Players{Configured: status.Minecraft.Configured, State: "unavailable", Max: status.Minecraft.MaxPlayers, Error: "Player information is temporarily unavailable."}
+	}
+	return pageData{
+		Title:         "Dashboard",
+		Version:       a.config.Version,
+		Commit:        a.config.Commit,
+		ManagementAPI: a.config.ManagementAPI,
+		CSRF:          csrf,
+		Status:        status,
+		Players:       players,
+	}, nil
+}
+
+func (a *App) handleDashboardError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, api.ErrUnauthorized) {
+		a.clearSessionCookies(w)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	a.render(w, "dashboard.html", pageData{Title: "Dashboard", Version: a.config.Version, Commit: a.config.Commit, ManagementAPI: a.config.ManagementAPI, CSRF: csrfFromRequest(r), Status: status})
+	if errors.Is(err, api.ErrPasswordChangeRequired) {
+		http.Redirect(w, r, "/password", http.StatusSeeOther)
+		return
+	}
+	http.Error(w, "management service unavailable", http.StatusBadGateway)
+}
+
+func actionResultMessage(action string) string {
+	switch action {
+	case "start":
+		return "Minecraft start requested."
+	case "stop":
+		return "Minecraft stopped."
+	case "restart":
+		return "Minecraft restarted."
+	default:
+		return ""
+	}
+}
+
+func actionLabel(action string) string {
+	switch action {
+	case "stop":
+		return "Stop anyway"
+	case "restart":
+		return "Restart anyway"
+	default:
+		return "Continue"
+	}
+}
+
+func actionOperation(action string) string {
+	switch action {
+	case "stop":
+		return "Stopping Minecraft"
+	case "restart":
+		return "Restarting Minecraft"
+	default:
+		return "Continuing"
+	}
+}
+
+func actionProgress(action string) string {
+	switch action {
+	case "start":
+		return "Starting…"
+	case "stop":
+		return "Stopping…"
+	case "restart":
+		return "Restarting…"
+	default:
+		return "Working…"
+	}
 }
 
 func (a *App) render(w http.ResponseWriter, name string, data pageData) {
@@ -303,7 +452,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})
 }
