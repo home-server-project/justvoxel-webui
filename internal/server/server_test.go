@@ -137,8 +137,8 @@ func TestCSRFRejectsMissingOrWrongToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	cases := []struct {
-		name       string
-		form       string
+		name        string
+		form        string
 		cookieValue string
 	}{
 		{name: "missing form token", form: "", cookieValue: "token"},
