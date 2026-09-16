@@ -75,7 +75,7 @@ func TestLoginPageUsesVoxelAdministrator(t *testing.T) {
 	}
 }
 
-func TestPasswordPageShowsPlatformMinimum(t *testing.T) {
+func TestPasswordPageShowsPlainLanguageRequirements(t *testing.T) {
 	fake := newAuthFlowAPI()
 	fake.authStatus.MinimumPasswordLen = 8
 	app, err := New(fake, Config{Version: "test", ManagementAPI: "v1"})
@@ -90,11 +90,18 @@ func TestPasswordPageShowsPlatformMinimum(t *testing.T) {
 		t.Fatalf("got %d: %s", rr.Code, rr.Body.String())
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "Minimum length: 8 characters") || !strings.Contains(body, `minlength="8"`) {
+	if !strings.Contains(body, "Use at least 8 characters") || !strings.Contains(body, `minlength="8"`) {
 		t.Fatalf("platform password minimum missing: %s", body)
 	}
-	if !strings.Contains(body, "host system password-quality policy") {
-		t.Fatalf("host password policy explanation missing: %s", body)
+	for _, requirement := range []string{
+		"mix letters, numbers, and symbols",
+		"simple, repeated, or predictable patterns",
+		"too similar to your current password",
+		"JustVoxel will show the reason",
+	} {
+		if !strings.Contains(body, requirement) {
+			t.Fatalf("plain-language password requirement %q missing: %s", requirement, body)
+		}
 	}
 	if !strings.Contains(body, "local console") || !strings.Contains(body, "SSH password login") {
 		t.Fatalf("system-account explanation missing: %s", body)
@@ -117,8 +124,8 @@ func TestAuthenticationSettingsShowsSystemMode(t *testing.T) {
 	if !strings.Contains(body, "System account") || !strings.Contains(body, "Separate WebUI password") {
 		t.Fatalf("authentication mode choices missing: %s", body)
 	}
-	if !strings.Contains(body, "host system password-quality policy") {
-		t.Fatalf("host password policy explanation missing: %s", body)
+	if !strings.Contains(body, "Password requirements:") || !strings.Contains(body, "mix letters, numbers, and symbols") {
+		t.Fatalf("plain-language password requirements missing: %s", body)
 	}
 }
 
@@ -194,6 +201,7 @@ func TestAuthenticationModeChangeRejectsMissingCSRF(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "http://example/settings/authentication", strings.NewReader("mode=system"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", "null")
 	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: "session-token"})
 	rr := httptest.NewRecorder()
 	app.Handler().ServeHTTP(rr, req)
