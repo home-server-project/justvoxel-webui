@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"html/template"
 	"io/fs"
@@ -55,12 +56,18 @@ type pageData struct {
 	CSRF             string
 	Status           api.Status
 	Players          api.Players
+	PendingAction    string
 	ConfirmAction    string
 	ConfirmLabel     string
 	ConfirmOperation string
 	ConfirmProgress  string
 	ConfirmOnline    int
 	ConfirmPlayers   []string
+}
+
+type dashboardSnapshot struct {
+	Status  api.Status  `json:"status"`
+	Players api.Players `json:"players"`
 }
 
 func New(client API, cfg Config) (*App, error) {
@@ -89,6 +96,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("POST /password", a.providerPasswordChange)
 	mux.HandleFunc("GET /settings/authentication", a.authenticationPage)
 	mux.HandleFunc("POST /settings/authentication", a.authenticationChange)
+	mux.HandleFunc("GET /api/dashboard-status", a.dashboardStatus)
 	mux.HandleFunc("POST /minecraft/start", a.minecraftAction("start"))
 	mux.HandleFunc("POST /minecraft/stop", a.minecraftAction("stop"))
 	mux.HandleFunc("POST /minecraft/restart", a.minecraftAction("restart"))
@@ -239,8 +247,41 @@ func (a *App) dashboard(w http.ResponseWriter, r *http.Request) {
 		a.handleDashboardError(w, r, err)
 		return
 	}
-	data.Message = actionResultMessage(r.URL.Query().Get("result"))
+	result := r.URL.Query().Get("result")
+	data.Message = actionResultMessage(result)
+	data.PendingAction = pendingAction(result)
 	a.render(w, "dashboard.html", data)
+}
+
+func (a *App) dashboardStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if mustChange(r) {
+		http.Error(w, "password change required", http.StatusForbidden)
+		return
+	}
+	session, ok := sessionFromRequest(r)
+	if !ok {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	data, err := a.dashboardData(r.Context(), session, "")
+	if err != nil {
+		if errors.Is(err, api.ErrUnauthorized) {
+			a.clearSessionCookies(w)
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		if errors.Is(err, api.ErrPasswordChangeRequired) {
+			http.Error(w, "password change required", http.StatusForbidden)
+			return
+		}
+		http.Error(w, "management service unavailable", http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(dashboardSnapshot{Status: data.Status, Players: data.Players}); err != nil {
+		http.Error(w, "could not encode dashboard status", http.StatusInternalServerError)
+	}
 }
 
 func (a *App) minecraftAction(action string) http.HandlerFunc {
@@ -340,9 +381,18 @@ func actionResultMessage(action string) string {
 	case "start":
 		return "Minecraft start requested."
 	case "stop":
-		return "Minecraft stopped."
+		return "Minecraft stop requested."
 	case "restart":
-		return "Minecraft restarted."
+		return "Minecraft restart requested."
+	default:
+		return ""
+	}
+}
+
+func pendingAction(action string) string {
+	switch action {
+	case "start", "stop", "restart":
+		return action
 	default:
 		return ""
 	}

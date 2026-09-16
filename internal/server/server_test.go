@@ -239,10 +239,67 @@ func TestDashboardRendersStatusPlayersAndControls(t *testing.T) {
 		t.Fatalf("got %d", rr.Code)
 	}
 	body := rr.Body.String()
-	for _, want := range []string{"Running", "2 / 10", "1.21.8", "Alex", "Steve", "10-test", "1.0.0", "/minecraft/start", "/minecraft/stop", "/minecraft/restart"} {
+	for _, want := range []string{"Running", "2 / 10", "1.21.8", "Alex", "Steve", "10-test", "1.0.0", "/minecraft/start", "/minecraft/stop", "/minecraft/restart", `data-dashboard-status="/api/dashboard-status"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing %q in response", want)
 		}
+	}
+}
+
+func TestDashboardStatusRequiresAuthentication(t *testing.T) {
+	app, err := New(&fakeAPI{}, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://example/api/dashboard-status", nil)
+	app.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rr.Code)
+	}
+}
+
+func TestDashboardStatusReturnsLiveJSON(t *testing.T) {
+	app, err := New(&fakeAPI{}, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://example/api/dashboard-status", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: "session-token"})
+	app.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("unexpected content type %q", got)
+	}
+	body := rr.Body.String()
+	for _, want := range []string{`"state":"Running"`, `"online":2`, `"names":["Alex","Steve"]`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in status response: %s", want, body)
+		}
+	}
+}
+
+func TestDashboardResultMarksPendingAction(t *testing.T) {
+	app, err := New(&fakeAPI{}, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://example/?result=restart", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: "session-token"})
+	app.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `data-pending-action="restart"`) {
+		t.Fatalf("missing pending restart state: %s", body)
+	}
+	if !strings.Contains(body, "Minecraft restart requested.") {
+		t.Fatalf("missing restart request message: %s", body)
 	}
 }
 
@@ -315,7 +372,7 @@ func TestMinecraftRestartRendersPlayerConfirmation(t *testing.T) {
 }
 
 func TestMinecraftConfirmedRestartRedirectsAfterSuccess(t *testing.T) {
-	fake := &fakeAPI{actionResult: api.MinecraftActionResponse{OK: true, Action: "restart", Message: "Minecraft restarted."}}
+	fake := &fakeAPI{actionResult: api.MinecraftActionResponse{OK: true, Action: "restart", Message: "Minecraft restart requested."}}
 	app, err := New(fake, Config{ExternalScheme: "http"})
 	if err != nil {
 		t.Fatal(err)
