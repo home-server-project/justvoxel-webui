@@ -199,8 +199,7 @@ func (c *Client) do(ctx context.Context, method, path, session string, body any,
 		return ErrPasswordChangeRequired
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		limited, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("management API %s: %s", resp.Status, string(limited))
+		return readResponseError(resp)
 	}
 	if out != nil {
 		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
