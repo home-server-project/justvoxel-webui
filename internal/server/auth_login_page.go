@@ -1,8 +1,6 @@
 package server
 
-import (
-	"net/http"
-)
+import "net/http"
 
 func (a *App) providerLoginPage(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
@@ -16,8 +14,11 @@ func (a *App) providerLoginPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	message := ""
-	if r.URL.Query().Get("message") == "password-changed" {
+	switch r.URL.Query().Get("message") {
+	case "password-changed":
 		message = "Password changed. Please sign in again."
+	case "auth-mode-changed":
+		message = "Authentication mode changed. Please sign in again."
 	}
 	a.render(w, "login.html", pageData{
 		Title:         "Sign in",
