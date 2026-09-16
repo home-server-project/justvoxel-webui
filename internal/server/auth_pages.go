@@ -98,7 +98,7 @@ func (a *App) providerPasswordChange(w http.ResponseWriter, r *http.Request) {
 			CSRF:               csrfFromRequest(r),
 			MinimumPasswordLen: status.MinimumPasswordLen,
 			SystemMode:         status.Mode == "system",
-			Error:              "New passwords must match and satisfy the system minimum length.",
+			Error:              "New passwords must match and meet the host system password policy.",
 		})
 		return
 	}
@@ -109,6 +109,10 @@ func (a *App) providerPasswordChange(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
+		message := "Password change was rejected by the host system password policy."
+		if reason, ok := api.ErrorMessage(err); ok {
+			message = reason
+		}
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderPassword(w, passwordPageData{
 			Title:              "Change administrator password",
@@ -117,7 +121,7 @@ func (a *App) providerPasswordChange(w http.ResponseWriter, r *http.Request) {
 			CSRF:               csrfFromRequest(r),
 			MinimumPasswordLen: status.MinimumPasswordLen,
 			SystemMode:         status.Mode == "system",
-			Error:              "Password change was rejected by the system password policy.",
+			Error:              message,
 		})
 		return
 	}
