@@ -12,10 +12,11 @@ import (
 
 type authFlowAPI struct {
 	*fakeAPI
-	authStatus api.AuthStatus
-	change     api.AuthModeChange
-	changeResp api.AuthModeChangeResponse
-	changeErr  error
+	authStatus  api.AuthStatus
+	change      api.AuthModeChange
+	changeResp  api.AuthModeChangeResponse
+	changeErr   error
+	passwordErr error
 }
 
 func newAuthFlowAPI() *authFlowAPI {
@@ -50,6 +51,13 @@ func (f *authFlowAPI) ChangeAuthMode(_ context.Context, session string, change a
 	return f.changeResp, nil
 }
 
+func (f *authFlowAPI) ChangePassword(ctx context.Context, session, currentPassword, newPassword string) error {
+	if f.passwordErr != nil {
+		return f.passwordErr
+	}
+	return f.fakeAPI.ChangePassword(ctx, session, currentPassword, newPassword)
+}
+
 func TestLoginPageUsesVoxelAdministrator(t *testing.T) {
 	app, err := New(newAuthFlowAPI(), Config{Version: "test", ManagementAPI: "v1"})
 	if err != nil {
@@ -82,8 +90,11 @@ func TestPasswordPageShowsPlatformMinimum(t *testing.T) {
 		t.Fatalf("got %d: %s", rr.Code, rr.Body.String())
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "at least 8 characters") || !strings.Contains(body, `minlength="8"`) {
+	if !strings.Contains(body, "Minimum length: 8 characters") || !strings.Contains(body, `minlength="8"`) {
 		t.Fatalf("platform password minimum missing: %s", body)
+	}
+	if !strings.Contains(body, "host system password-quality policy") {
+		t.Fatalf("host password policy explanation missing: %s", body)
 	}
 	if !strings.Contains(body, "local console") || !strings.Contains(body, "SSH password login") {
 		t.Fatalf("system-account explanation missing: %s", body)
@@ -105,6 +116,9 @@ func TestAuthenticationSettingsShowsSystemMode(t *testing.T) {
 	body := rr.Body.String()
 	if !strings.Contains(body, "System account") || !strings.Contains(body, "Separate WebUI password") {
 		t.Fatalf("authentication mode choices missing: %s", body)
+	}
+	if !strings.Contains(body, "host system password-quality policy") {
+		t.Fatalf("host password policy explanation missing: %s", body)
 	}
 }
 
@@ -129,6 +143,46 @@ func TestSystemToSeparateModeRequiresCSRFAndReauthentication(t *testing.T) {
 	}
 	if fake.change.Mode != "separate" || fake.change.SystemPassword != "system-secret" || fake.change.NewWebPassword != "web-secret" {
 		t.Fatalf("mode-change request not forwarded correctly: %#v", fake.change)
+	}
+}
+
+func TestAuthenticationModeChangeShowsBackendPolicyReason(t *testing.T) {
+	fake := newAuthFlowAPI()
+	fake.changeErr = &api.ResponseError{StatusCode: http.StatusBadRequest, Message: "Password is too simple"}
+	app, err := New(fake, Config{Version: "test", ManagementAPI: "v1", ExternalScheme: "http"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := "csrf=token&mode=separate&system_password=system-secret&new_web_password=web-secret&confirm_web_password=web-secret"
+	req := httptest.NewRequest(http.MethodPost, "http://example/settings/authentication", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", "null")
+	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookie, Value: "token"})
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "Password is too simple") {
+		t.Fatalf("backend policy reason not shown: %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestPasswordChangeShowsBackendPolicyReason(t *testing.T) {
+	fake := newAuthFlowAPI()
+	fake.passwordErr = &api.ResponseError{StatusCode: http.StatusBadRequest, Message: "Password is too simple"}
+	app, err := New(fake, Config{Version: "test", ManagementAPI: "v1", ExternalScheme: "http"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := "csrf=token&current_password=secret&new_password=strong-enough-123&confirm_password=strong-enough-123"
+	req := httptest.NewRequest(http.MethodPost, "http://example/password", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", "null")
+	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookie, Value: "token"})
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "Password is too simple") {
+		t.Fatalf("backend password rejection reason not shown: %d %s", rr.Code, rr.Body.String())
 	}
 }
 
