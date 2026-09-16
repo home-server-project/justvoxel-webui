@@ -102,7 +102,7 @@ func (a *App) authenticationChange(w http.ResponseWriter, r *http.Request) {
 				Mode:               current.Mode,
 				Username:           current.Username,
 				MinimumPasswordLen: current.MinimumPasswordLen,
-				Error:              "New WebUI passwords must match and satisfy the system minimum length.",
+				Error:              "New WebUI passwords must match and meet the host system password policy.",
 			})
 			return
 		}
@@ -124,6 +124,10 @@ func (a *App) authenticationChange(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		message := "Authentication mode change was rejected."
+		if reason, ok := api.ErrorMessage(err); ok {
+			message = reason
+		}
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderAuthentication(w, authenticationPageData{
 			Title:              "Authentication",
@@ -133,7 +137,7 @@ func (a *App) authenticationChange(w http.ResponseWriter, r *http.Request) {
 			Mode:               current.Mode,
 			Username:           current.Username,
 			MinimumPasswordLen: current.MinimumPasswordLen,
-			Error:              "Authentication mode change was rejected.",
+			Error:              message,
 		})
 		return
 	}
