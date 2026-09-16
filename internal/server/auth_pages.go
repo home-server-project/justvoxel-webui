@@ -14,14 +14,14 @@ type authenticationAPI interface {
 }
 
 type passwordPageData struct {
-	Title             string
-	Version           string
-	ManagementAPI     string
-	Error             string
-	Message           string
-	CSRF              string
+	Title              string
+	Version            string
+	ManagementAPI      string
+	Error              string
+	Message            string
+	CSRF               string
 	MinimumPasswordLen int
-	SystemMode        bool
+	SystemMode         bool
 }
 
 func (a *App) authAPI() (authenticationAPI, bool) {
