@@ -87,26 +87,76 @@ func TestLoginSetsLocalHTTPSession(t *testing.T) {
 	}
 }
 
-func TestCSRFRequiresSameHTTPOrigin(t *testing.T) {
+func TestCSRFAcceptsSameHTTPOrigin(t *testing.T) {
 	app, err := New(&fakeAPI{}, Config{ExternalScheme: "http"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	makeRequest := func(origin string) *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "http://example/logout", strings.NewReader("csrf=token"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", "http://example")
+	req.AddCookie(&http.Cookie{Name: csrfCookie, Value: "token"})
+	if !app.validCSRF(req) {
+		t.Fatal("same-origin HTTP CSRF token was rejected")
+	}
+}
+
+func TestCSRFAcceptsNullOriginWithValidToken(t *testing.T) {
+	app, err := New(&fakeAPI{}, Config{ExternalScheme: "http"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "http://example/logout", strings.NewReader("csrf=token"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", "null")
+	req.AddCookie(&http.Cookie{Name: csrfCookie, Value: "token"})
+	if !app.validCSRF(req) {
+		t.Fatal("null Origin with valid CSRF token was rejected")
+	}
+}
+
+func TestCSRFRejectsForeignOrigin(t *testing.T) {
+	app, err := New(&fakeAPI{}, Config{ExternalScheme: "http"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, origin := range []string{"https://example", "http://other.example"} {
 		req := httptest.NewRequest(http.MethodPost, "http://example/logout", strings.NewReader("csrf=token"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("Origin", origin)
 		req.AddCookie(&http.Cookie{Name: csrfCookie, Value: "token"})
-		return req
+		if app.validCSRF(req) {
+			t.Fatalf("foreign Origin %q was accepted", origin)
+		}
 	}
-	if !app.validCSRF(makeRequest("http://example")) {
-		t.Fatal("same-origin HTTP CSRF token was rejected")
+}
+
+func TestCSRFRejectsMissingOrWrongToken(t *testing.T) {
+	app, err := New(&fakeAPI{}, Config{ExternalScheme: "http"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if app.validCSRF(makeRequest("https://example")) {
-		t.Fatal("cross-scheme origin was accepted")
+	cases := []struct {
+		name       string
+		form       string
+		cookieValue string
+	}{
+		{name: "missing form token", form: "", cookieValue: "token"},
+		{name: "wrong form token", form: "csrf=wrong", cookieValue: "token"},
+		{name: "missing cookie", form: "csrf=token", cookieValue: ""},
 	}
-	if app.validCSRF(makeRequest("http://other.example")) {
-		t.Fatal("cross-host origin was accepted")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "http://example/logout", strings.NewReader(tc.form))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("Origin", "null")
+			if tc.cookieValue != "" {
+				req.AddCookie(&http.Cookie{Name: csrfCookie, Value: tc.cookieValue})
+			}
+			if app.validCSRF(req) {
+				t.Fatal("invalid CSRF request was accepted")
+			}
+		})
 	}
 }
 
