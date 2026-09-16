@@ -288,7 +288,7 @@ func (a *App) validCSRF(r *http.Request) bool {
 		return false
 	}
 	origin := r.Header.Get("Origin")
-	if origin == "" {
+	if origin == "" || origin == "null" {
 		return true
 	}
 	u, err := url.Parse(origin)
