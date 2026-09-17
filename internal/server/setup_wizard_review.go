@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +14,8 @@ import (
 )
 
 const minecraftEULAURL = "https://www.minecraft.net/eula"
+
+var setupPlanFingerprintPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 type setupPlanningAPI interface {
 	AdminSetupPlan(ctx context.Context, session string, request api.AdminSetupPlanRequest) (api.AdminSetupPlanResponse, error)
@@ -32,20 +36,21 @@ type setupReviewStore struct {
 var firstRunSetupReviews = setupReviewStore{reviews: make(map[setupDraftKey]setupReviewState)}
 
 type setupReviewPageData struct {
-	Title         string
-	Version       string
-	ManagementAPI string
-	CSRF          string
-	Identity      api.SessionInfo
-	Plan          api.AdminSetupPlanResponse
-	Error         string
-	EULAAccepted  bool
-	EULAURL       string
-	StorageLabel  string
-	StorageSize   string
-	BackupLabel   string
-	BackupSize    string
-	VersionLabel  string
+	Title             string
+	Version           string
+	ManagementAPI     string
+	CSRF              string
+	Identity          api.SessionInfo
+	Plan              api.AdminSetupPlanResponse
+	Error             string
+	EULAAccepted      bool
+	EULAURL           string
+	StorageLabel      string
+	StorageSize       string
+	BackupLabel       string
+	BackupSize        string
+	VersionLabel      string
+	ShortPlanReference string
 }
 
 func (a *App) registerSetupWizardReviewRoutes(mux *http.ServeMux) {
@@ -99,6 +104,13 @@ func (a *App) setupWizardReviewEULA(w http.ResponseWriter, r *http.Request) {
 		a.renderSetupReview(w, identity, state, csrfFromRequest(r), setupReviewErrorMessage(planErr))
 		return
 	}
+	if submitted := r.FormValue("plan_fingerprint"); submitted == "" || submitted != state.Plan.PlanFingerprint {
+		state.EULAAccepted = false
+		firstRunSetupReviews.save(a, session, state)
+		w.WriteHeader(http.StatusConflict)
+		a.renderSetupReview(w, identity, state, csrfFromRequest(r), "Setup changed since it was reviewed. Review the updated configuration before continuing.")
+		return
+	}
 	if r.FormValue("eula_accepted") != "on" {
 		state.EULAAccepted = false
 		firstRunSetupReviews.save(a, session, state)
@@ -142,7 +154,7 @@ func (a *App) setupReviewState(ctx context.Context, session string, client admin
 	if err != nil {
 		return setupReviewState{}, err, http.StatusBadRequest, false
 	}
-	if cached, ok := firstRunSetupReviews.get(a, session); ok && cached.DraftUpdatedAt.Equal(draft.UpdatedAt) && cached.Request == request {
+	if cached, ok := firstRunSetupReviews.get(a, session); ok && cached.DraftUpdatedAt.Equal(draft.UpdatedAt) && cached.Request == request && validSetupPlanFingerprint(cached.Plan.PlanFingerprint) {
 		return cached, nil, http.StatusOK, true
 	}
 	planner, ok := client.(setupPlanningAPI)
@@ -167,8 +179,23 @@ func (a *App) setupReviewState(ctx context.Context, session string, client admin
 	if !plan.OK {
 		return state, errors.New("setup planning did not return a validated configuration"), http.StatusBadRequest, false
 	}
+	if !validSetupPlanFingerprint(plan.PlanFingerprint) {
+		return state, errors.New("setup planning did not return a valid plan identity"), http.StatusBadGateway, false
+	}
 	firstRunSetupReviews.save(a, session, state)
 	return state, nil, http.StatusOK, true
+}
+
+func validSetupPlanFingerprint(value string) bool {
+	return setupPlanFingerprintPattern.MatchString(value)
+}
+
+func shortSetupPlanReference(value string) string {
+	if !validSetupPlanFingerprint(value) {
+		return ""
+	}
+	hexValue := strings.TrimPrefix(value, "sha256:")
+	return hexValue[:8] + "…"
 }
 
 func setupDraftReadyForReview(draft setupDraft) bool {
@@ -221,7 +248,7 @@ func setupReviewErrorMessage(err error) string {
 	if message, ok := api.ErrorMessage(err); ok {
 		return message
 	}
-	if err.Error() == "setup planning is unavailable" {
+	if err.Error() == "setup planning is unavailable" || err.Error() == "setup planning did not return a valid plan identity" {
 		return "Setup validation is temporarily unavailable."
 	}
 	return err.Error()
@@ -233,9 +260,10 @@ func (a *App) renderSetupReview(w http.ResponseWriter, identity api.SessionInfo,
 		Title: "Review setup", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI,
 		CSRF: csrf, Identity: identity, Plan: plan, Error: errorMessage,
 		EULAAccepted: state.EULAAccepted, EULAURL: minecraftEULAURL,
-		StorageLabel: setupStorageTypeLabel(plan.Normalized.Storage.Type),
-		BackupLabel:  setupBackupTypeLabel(plan.Normalized.Backups.Type),
-		VersionLabel: setupVersionPolicyLabel(plan.Normalized.Minecraft.RequestedVersionPolicy),
+		StorageLabel:      setupStorageTypeLabel(plan.Normalized.Storage.Type),
+		BackupLabel:       setupBackupTypeLabel(plan.Normalized.Backups.Type),
+		VersionLabel:      setupVersionPolicyLabel(plan.Normalized.Minecraft.RequestedVersionPolicy),
+		ShortPlanReference: shortSetupPlanReference(plan.PlanFingerprint),
 	}
 	if plan.Normalized.Storage.SizeBytes > 0 {
 		data.StorageSize = humanBytes(plan.Normalized.Storage.SizeBytes)
