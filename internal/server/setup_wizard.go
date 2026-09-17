@@ -16,12 +16,10 @@ import (
 
 const setupDraftLifetime = 24 * time.Hour
 
-var (
-	setupMemoryPattern  = regexp.MustCompile(`^([1-9][0-9]*)([mMgG])$`)
-	setupImageTagPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
-	setupVersionPattern  = regexp.MustCompile(`^[0-9A-Za-z._-]+$`)
-	setupTimezonePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+/-]*$`)
-)
+var setupMemoryPattern = regexp.MustCompile(`^([1-9][0-9]*)([mMgG])$`)
+var setupImageTagPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+var setupVersionPattern = regexp.MustCompile(`^[0-9A-Za-z._-]+$`)
+var setupTimezonePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+/-]*$`)
 
 type setupDraftKey struct {
 	app     *App
@@ -378,11 +376,9 @@ func validateSetupMinecraft(minecraft setupMinecraftDraft, defaults api.AdminSet
 	if defaults.SystemMemoryMiB > 0 && containerMiB >= defaults.SystemMemoryMiB {
 		return errors.New("Maximum Minecraft memory must leave some memory available for JustVoxel and system services.")
 	}
-	javaPort, err := parseSetupPort(minecraft.JavaPort, "Minecraft Java port")
-	if err != nil {
+	if _, err := parseSetupPort(minecraft.JavaPort, "Minecraft Java port"); err != nil {
 		return err
 	}
-	_ = javaPort
 	if _, err := parseSetupPort(minecraft.BedrockPort, "Bedrock UDP port"); err != nil {
 		return err
 	}
