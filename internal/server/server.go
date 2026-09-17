@@ -96,6 +96,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("POST /password", a.providerPasswordChange)
 	mux.HandleFunc("GET /settings/authentication", a.authenticationPage)
 	mux.HandleFunc("POST /settings/authentication", a.authenticationChange)
+	a.registerAdminUsersRoutes(mux)
 	mux.HandleFunc("GET /api/dashboard-status", a.dashboardStatus)
 	mux.HandleFunc("POST /minecraft/start", a.minecraftAction("start"))
 	mux.HandleFunc("POST /minecraft/stop", a.minecraftAction("stop"))
