@@ -11,6 +11,8 @@ import (
 	"github.com/home-server-project/justvoxel-webui/internal/api"
 )
 
+const setupReviewFingerprint = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 type fakeSetupPlanningAPI struct {
 	*fakeDiscoveryAPI
 	plan        api.AdminSetupPlanResponse
@@ -33,8 +35,9 @@ func setupReviewClient() *fakeSetupPlanningAPI {
 	return &fakeSetupPlanningAPI{
 		fakeDiscoveryAPI: base,
 		plan: api.AdminSetupPlanResponse{
-			OK:            true,
-			SchemaVersion: "v1",
+			OK:              true,
+			SchemaVersion:   "v1",
+			PlanFingerprint: setupReviewFingerprint,
 			Normalized: api.AdminSetupNormalizedPlan{
 				Server: api.AdminSetupPlanServer{
 					MOTD: "Normalized Family Server", MaxPlayers: 20,
@@ -85,6 +88,14 @@ func advanceSetupToReview(t *testing.T, app *App) {
 	}
 }
 
+func eulaForm(accepted bool, fingerprint string) string {
+	values := url.Values{"csrf": {"csrf-token"}, "plan_fingerprint": {fingerprint}}
+	if accepted {
+		values.Set("eula_accepted", "on")
+	}
+	return values.Encode()
+}
+
 func TestSetupReviewUsesAuthoritativeNormalizedPlan(t *testing.T) {
 	client := setupReviewClient()
 	app, err := New(client, Config{Version: "test", ManagementAPI: "v1"})
@@ -105,6 +116,7 @@ func TestSetupReviewUsesAuthoritativeNormalizedPlan(t *testing.T) {
 		"Recommended stable", "/var/lib/justvoxel/minecraft", "/var/lib/justvoxel/backups",
 		"same_physical_disk", "Minecraft End User License Agreement", "https://www.minecraft.net/eula",
 		"Setup execution will be enabled by the transactional setup engine", "/static/setup-review.css",
+		`name="plan_fingerprint" value="` + setupReviewFingerprint + `"`, "Validated plan:", "01234567…",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("review missing %q: %s", want, body)
@@ -121,7 +133,7 @@ func TestSetupReviewUsesAuthoritativeNormalizedPlan(t *testing.T) {
 	}
 }
 
-func TestSetupReviewEULAMustBeExplicitAndIsSessionScoped(t *testing.T) {
+func TestSetupReviewEULAMustBeExplicitAndIsBoundToReviewedPlan(t *testing.T) {
 	client := setupReviewClient()
 	app, err := New(client, Config{Version: "test", ManagementAPI: "v1"})
 	if err != nil {
@@ -132,12 +144,12 @@ func TestSetupReviewEULAMustBeExplicitAndIsSessionScoped(t *testing.T) {
 	advanceSetupToReview(t, app)
 	_ = httptestResponse(app, authenticatedAdminRequest(http.MethodGet, "http://example/setup/review", ""))
 
-	missing := httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/review/eula", "csrf=csrf-token"))
+	missing := httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/review/eula", eulaForm(false, setupReviewFingerprint)))
 	if missing.Code != http.StatusBadRequest || !strings.Contains(missing.Body.String(), "Accept the Minecraft End User License Agreement") {
 		t.Fatalf("missing EULA acceptance was not rejected: %d %s", missing.Code, missing.Body.String())
 	}
 
-	accepted := httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/review/eula", "csrf=csrf-token&eula_accepted=on"))
+	accepted := httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/review/eula", eulaForm(true, setupReviewFingerprint)))
 	if accepted.Code != http.StatusSeeOther || accepted.Header().Get("Location") != "/setup/review" {
 		t.Fatalf("EULA acceptance returned %d %q: %s", accepted.Code, accepted.Header().Get("Location"), accepted.Body.String())
 	}
@@ -147,6 +159,49 @@ func TestSetupReviewEULAMustBeExplicitAndIsSessionScoped(t *testing.T) {
 	}
 	if client.planHit != 1 {
 		t.Fatalf("validated plan was needlessly recomputed %d times", client.planHit)
+	}
+}
+
+func TestSetupReviewRejectsStalePlanFingerprint(t *testing.T) {
+	client := setupReviewClient()
+	app, err := New(client, Config{Version: "test", ManagementAPI: "v1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer firstRunSetupDrafts.delete(app, "session-token")
+	defer firstRunSetupReviews.delete(app, "session-token")
+	advanceSetupToReview(t, app)
+	_ = httptestResponse(app, authenticatedAdminRequest(http.MethodGet, "http://example/setup/review", ""))
+
+	stale := "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	rr := httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/review/eula", eulaForm(true, stale)))
+	if rr.Code != http.StatusConflict || !strings.Contains(rr.Body.String(), "Setup changed since it was reviewed") {
+		t.Fatalf("stale reviewed plan was not rejected: %d %s", rr.Code, rr.Body.String())
+	}
+	state, ok := firstRunSetupReviews.get(app, "session-token")
+	if !ok || state.EULAAccepted {
+		t.Fatalf("stale fingerprint left EULA accepted: %#v", state)
+	}
+}
+
+func TestSetupReviewRejectsMissingOrMalformedPlanIdentity(t *testing.T) {
+	for _, fingerprint := range []string{"", "sha256:not-a-real-fingerprint"} {
+		t.Run(fingerprint, func(t *testing.T) {
+			client := setupReviewClient()
+			client.plan.PlanFingerprint = fingerprint
+			app, err := New(client, Config{Version: "test", ManagementAPI: "v1"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer firstRunSetupDrafts.delete(app, "session-token")
+			defer firstRunSetupReviews.delete(app, "session-token")
+			advanceSetupToReview(t, app)
+
+			rr := httptestResponse(app, authenticatedAdminRequest(http.MethodGet, "http://example/setup/review", ""))
+			if rr.Code != http.StatusBadGateway || !strings.Contains(rr.Body.String(), "Setup validation is temporarily unavailable") {
+				t.Fatalf("bad plan identity returned %d: %s", rr.Code, rr.Body.String())
+			}
+		})
 	}
 }
 
@@ -160,7 +215,7 @@ func TestSetupReviewBackInvalidatesAcceptedReview(t *testing.T) {
 	defer firstRunSetupReviews.delete(app, "session-token")
 	advanceSetupToReview(t, app)
 	_ = httptestResponse(app, authenticatedAdminRequest(http.MethodGet, "http://example/setup/review", ""))
-	_ = httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/review/eula", "csrf=csrf-token&eula_accepted=on"))
+	_ = httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/review/eula", eulaForm(true, setupReviewFingerprint)))
 
 	back := httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/review/back", "csrf=csrf-token"))
 	if back.Code != http.StatusSeeOther || back.Header().Get("Location") != "/setup" {
@@ -178,6 +233,7 @@ func TestSetupReviewBackInvalidatesAcceptedReview(t *testing.T) {
 func TestSetupReviewShowsAuthoritativeValidationError(t *testing.T) {
 	client := setupReviewClient()
 	client.plan.OK = false
+	client.plan.PlanFingerprint = ""
 	client.plan.Code = "invalid_storage_layout"
 	client.plan.Error = "Minecraft data and backups cannot overlap."
 	client.planErr = &api.ResponseError{StatusCode: http.StatusBadRequest, Message: client.plan.Error}
