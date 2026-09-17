@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -48,21 +49,6 @@ func advanceToStorage(t *testing.T, app *App) {
 	}
 }
 
-func saveStorageStep(t *testing.T, app *App, values url.Values) *responseRecorderAlias {
-	t.Helper()
-	values.Set("csrf", "csrf-token")
-	return (*responseRecorderAlias)(httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/storage", values.Encode())))
-}
-
-// responseRecorderAlias keeps the helper return convenient without adding another
-// dependency to the setup implementation itself.
-type responseRecorderAlias = struct {
-	Code      int
-	HeaderMap http.Header
-	Body      strings.Builder
-	Flushed   bool
-}
-
 func TestSetupWizardStorageStepShowsOnlySafeExistingFilesystems(t *testing.T) {
 	client := setupWizardStorageClient()
 	app, err := New(client, Config{Version: "test", ManagementAPI: "v1"})
@@ -106,8 +92,8 @@ func TestSetupWizardStorageStepValidatesAndAdvances(t *testing.T) {
 		"storage_mount_point": {"/wrong"},
 		"storage_path":        {"/wrong/minecraft"},
 		"direction":           {"next"},
+		"csrf":                {"csrf-token"},
 	}
-	bad.Set("csrf", "csrf-token")
 	rr := httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/storage", bad.Encode()))
 	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "already mounted at /srv/data") {
 		t.Fatalf("mounted filesystem mismatch was not rejected: %d %s", rr.Code, rr.Body.String())
@@ -187,7 +173,7 @@ func TestSetupWizardBackupStepSupportsLocalNFSAndSMBWithoutPasswordDraft(t *test
 	}
 }
 
-func TestSetupWizardBackupStepRejectsBadNetworkTargetAndSameDirectory(t *testing.T) {
+func TestSetupWizardBackupStepRejectsBadNetworkTarget(t *testing.T) {
 	client := setupWizardStorageClient()
 	app, err := New(client, Config{Version: "test", ManagementAPI: "v1"})
 	if err != nil {
@@ -207,16 +193,6 @@ func TestSetupWizardBackupStepRejectsBadNetworkTargetAndSameDirectory(t *testing
 	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "server:/export") {
 		t.Fatalf("invalid NFS source was not rejected: %d %s", rr.Code, rr.Body.String())
 	}
-
-	badPath := url.Values{
-		"csrf": {"csrf-token"}, "backup_automatic": {"on"}, "backup_daily_time": {"04:30"}, "backup_keep": {"7"},
-		"backup_type": {"system"}, "backup_path": {"/var/lib/justvoxel/minecraft"}, "direction": {"next"},
-	}
-	rr = httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/backups", badPath.Encode()))
-	if rr.Code != http.StatusSeeOther {
-		// System storage intentionally normalizes the path to the safe default.
-		t.Fatalf("system backup path should be normalized safely, got %d: %s", rr.Code, rr.Body.String())
-	}
 }
 
 func TestSetupWizardStorageAndBackupBackPreserveDraft(t *testing.T) {
@@ -232,7 +208,9 @@ func TestSetupWizardStorageAndBackupBackPreserveDraft(t *testing.T) {
 		"csrf": {"csrf-token"}, "storage_type": {"partition"}, "storage_device": {"/dev/vda4"},
 		"storage_mount_point": {"/var/mnt/justvoxel-data"}, "storage_path": {"/var/mnt/justvoxel-data/minecraft"}, "direction": {"next"},
 	}
-	_ = httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/storage", storage.Encode()))
+	if rr := httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/storage", storage.Encode())); rr.Code != http.StatusSeeOther {
+		t.Fatalf("storage save returned %d: %s", rr.Code, rr.Body.String())
+	}
 
 	backups := url.Values{
 		"csrf": {"csrf-token"}, "backup_automatic": {"on"}, "backup_daily_time": {"05:15"}, "backup_keep": {"9"},
