@@ -15,12 +15,37 @@ document.addEventListener("submit", (event) => {
 const dashboard = document.querySelector("#dashboard[data-dashboard-status]");
 if (dashboard) {
   const statusURL = dashboard.dataset.dashboardStatus;
+  const sessionURL = dashboard.dataset.sessionInfo;
   let pendingAction = dashboard.dataset.pendingAction || "";
   let restartSawTransition = false;
 
   const text = (id, value) => {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
+  };
+
+  const loadRole = async () => {
+    try {
+      const response = await fetch(sessionURL, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (response.status === 401) {
+        window.location.assign("/login");
+        return;
+      }
+      if (!response.ok) return;
+      const identity = await response.json();
+      const role = String(identity.role || "").toLowerCase();
+      if (!["administrator", "operator", "viewer"].includes(role)) return;
+      document.body.classList.remove("role-pending");
+      document.body.classList.add(`role-${role}`);
+      text("session-role", role);
+    } catch (_) {
+      // Fail closed: role-gated controls remain hidden until identity is known.
+    }
   };
 
   const actionProgress = (action) => {
@@ -184,6 +209,7 @@ if (dashboard) {
     });
   }
 
+  loadRole();
   refreshDashboard();
   window.setInterval(refreshDashboard, 5000);
 }
