@@ -118,7 +118,7 @@ func TestMinecraftSettingsPlanShowsReviewWithoutApplying(t *testing.T) {
 	}
 	client.planResponse = api.AdminConfigurationChangeResponse{
 		OK: true, RestartRequired: true, MemoryRemainingMiB: 2048,
-		Changes: []api.AdminConfigurationChange{{Field: "max_players", Label: "Maximum players", Before: "10", After: "20", RestartRequired: true}},
+		Changes:  []api.AdminConfigurationChange{{Field: "max_players", Label: "Maximum players", Before: "10", After: "20", RestartRequired: true}},
 		Warnings: []string{"This is a tight memory configuration."},
 		Proposed: api.AdminConfigurationDiscovery{Configured: true, Minecraft: client.configuration.Minecraft, Backup: client.configuration.Backup},
 	}

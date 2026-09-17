@@ -108,8 +108,8 @@ func (a *App) buildServerSettingsPageData(identity api.SessionInfo, configuratio
 		Title: "Minecraft settings", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI,
 		Identity: identity, Configuration: configuration, Defaults: defaults, Form: form, Plan: plan,
 		Error: errorMessage, Message: message,
-		SystemMemory: formatMemoryMiB(defaults.SystemMemoryMiB),
-		SystemReserveMinimum: formatMemoryMiB(defaults.SystemReserveMinimumMiB),
+		SystemMemory:             formatMemoryMiB(defaults.SystemMemoryMiB),
+		SystemReserveMinimum:     formatMemoryMiB(defaults.SystemReserveMinimumMiB),
 		SystemReserveRecommended: formatMemoryMiB(defaults.SystemReserveRecommendedMiB),
 	}
 }
