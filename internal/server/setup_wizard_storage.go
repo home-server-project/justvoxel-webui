@@ -127,7 +127,7 @@ func (a *App) setupWizardSaveBackups(w http.ResponseWriter, r *http.Request) {
 	draft.Backups.Complete = true
 	draft.CurrentStep = 5
 	firstRunSetupDrafts.save(a, session, draft)
-	http.Redirect(w, r, "/setup", http.StatusSeeOther)
+	http.Redirect(w, r, "/setup/review", http.StatusSeeOther)
 }
 
 func initialSetupStorageDraft(defaults api.AdminSetupDefaults) setupStorageDraft {

@@ -68,6 +68,7 @@ func (a *App) registerAdminDiscoveryPages(mux *http.ServeMux) {
 	a.registerAdminBackupStoragePages(mux)
 	a.registerAdminStorageProvisionPages(mux)
 	a.registerSetupWizardRoutes(mux)
+	a.registerSetupWizardReviewRoutes(mux)
 }
 
 func (a *App) serverSettingsPage(w http.ResponseWriter, r *http.Request) {
