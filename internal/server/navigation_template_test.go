@@ -21,8 +21,10 @@ func TestGroupedHeaderNavigationUX(t *testing.T) {
 		`data-nav-group="administration"`,
 		`>Administration</summary>`,
 		`href="/activity"`,
+		`href="/settings/server"`,
 		`href="/operations#whitelist"`,
 		`href="/operations#minecraft-logs"`,
+		`href="/settings/storage"`,
 		`href="/operations#manual-backup"`,
 		`href="/settings/activity"`,
 		`href="/settings/users"`,
@@ -80,6 +82,8 @@ func TestAuthenticatedTemplatesUseSharedHeader(t *testing.T) {
 		"users.html",
 		"authentication.html",
 		"password.html",
+		"server_settings.html",
+		"storage_settings.html",
 	} {
 		content, err := assets.ReadFile("templates/" + name)
 		if err != nil {
