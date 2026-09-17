@@ -12,6 +12,87 @@ document.addEventListener("submit", (event) => {
   }
 });
 
+const navigationGroups = Array.from(document.querySelectorAll(".nav-group"));
+if (navigationGroups.length > 0) {
+  navigationGroups.forEach((group) => {
+    group.addEventListener("toggle", () => {
+      if (!group.open) return;
+      navigationGroups.forEach((other) => {
+        if (other !== group) other.open = false;
+      });
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".primary-nav")) return;
+    navigationGroups.forEach((group) => {
+      group.open = false;
+    });
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    navigationGroups.forEach((group) => {
+      group.open = false;
+    });
+    const active = document.activeElement;
+    if (active && active.closest && active.closest(".nav-menu")) {
+      const group = active.closest(".nav-group");
+      const trigger = group && group.querySelector(".nav-trigger");
+      if (trigger) trigger.focus();
+    }
+  });
+
+  const path = window.location.pathname;
+  const hash = window.location.hash;
+  const brand = document.querySelector(".brand-link");
+  if (brand) {
+    if (path === "/") brand.setAttribute("aria-current", "page");
+    else brand.removeAttribute("aria-current");
+  }
+
+  let currentGroup = "";
+  let currentHref = "";
+  if (path === "/activity") {
+    currentGroup = "server";
+    currentHref = "/activity";
+  } else if (path === "/operations") {
+    if (hash === "#manual-backup") {
+      currentGroup = "storage";
+      currentHref = "/operations#manual-backup";
+    } else {
+      currentGroup = "server";
+      if (hash === "#whitelist") currentHref = "/operations#whitelist";
+      if (hash === "#minecraft-logs") currentHref = "/operations#minecraft-logs";
+    }
+  } else if (path === "/settings/activity") {
+    currentGroup = "administration";
+    currentHref = "/settings/activity";
+  } else if (path === "/settings/users") {
+    currentGroup = "administration";
+    currentHref = "/settings/users";
+  } else if (path === "/settings/authentication") {
+    currentGroup = "administration";
+    currentHref = "/settings/authentication";
+  } else if (path === "/password") {
+    currentGroup = "administration";
+    currentHref = "/password";
+  }
+
+  if (currentGroup) {
+    const group = document.querySelector(`[data-nav-group="${currentGroup}"]`);
+    const trigger = group && group.querySelector(".nav-trigger");
+    if (trigger) trigger.setAttribute("aria-current", "page");
+  }
+  if (currentHref) {
+    document.querySelectorAll(".nav-menu a").forEach((link) => {
+      if (link.getAttribute("href") === currentHref) {
+        link.setAttribute("aria-current", "page");
+      }
+    });
+  }
+}
+
 const dashboard = document.querySelector("#dashboard[data-dashboard-status]");
 if (dashboard) {
   const statusURL = dashboard.dataset.dashboardStatus;

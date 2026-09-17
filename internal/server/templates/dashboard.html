@@ -8,21 +8,7 @@
   <script src="/static/app.js" defer></script>
 </head>
 <body class="role-pending">
-<header>
-  <a class="brand-link" href="/" aria-label="JustVoxel dashboard" aria-current="page"><strong>JustVoxel</strong><span>Minecraft Server Appliance</span></a>
-  <nav aria-label="Primary navigation">
-    <a href="/activity">Activity</a>
-    <a class="role-admin-or-operator" href="/operations">Operations</a>
-    <a class="role-admin" href="/settings/activity">Admin activity</a>
-    <a class="role-admin" href="/settings/users">Users</a>
-    <a class="role-admin" href="/settings/authentication">Authentication</a>
-    <a class="role-admin" href="/password">Change password</a>
-    <form method="post" action="/logout">
-      <input type="hidden" name="csrf" value="{{.CSRF}}">
-      <button class="secondary" type="submit">Log out</button>
-    </form>
-  </nav>
-</header>
+{{template "app-header" .}}
 <main id="dashboard" data-dashboard-status="/api/dashboard-status" data-session-info="/api/session-info" data-pending-action="{{.PendingAction}}">
   <div class="title-row">
     <div><p class="eyebrow">Dashboard · <span id="session-role">loading role</span></p><h1>Server overview</h1></div>

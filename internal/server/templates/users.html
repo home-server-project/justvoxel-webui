@@ -5,20 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>JustVoxel - Users</title>
   <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
 </head>
-<body>
-<header>
-  <div><strong>JustVoxel</strong><span>Minecraft Server Appliance</span></div>
-  <nav>
-    <a href="/">Dashboard</a>
-    <a href="/settings/authentication">Authentication</a>
-    <a href="/password">Change password</a>
-    <form method="post" action="/logout">
-      <input type="hidden" name="csrf" value="{{.CSRF}}">
-      <button class="secondary" type="submit">Log out</button>
-    </form>
-  </nav>
-</header>
+<body class="role-administrator">
+{{template "app-header" .}}
 <main>
   <div class="title-row">
     <div><p class="eyebrow">Administration</p><h1>Users</h1></div>
