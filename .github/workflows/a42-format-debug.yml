@@ -1,0 +1,22 @@
+name: A4.2 format debug
+
+on:
+  push:
+    branches:
+      - a42-first-run-server-minecraft-work
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Report gofmt files
+        run: |
+          gofmt -l internal/server/setup_wizard.go internal/server/setup_wizard_test.go
+          echo '--- setup_wizard.go ---'
+          gofmt -d internal/server/setup_wizard.go || true
+          echo '--- setup_wizard_test.go ---'
+          gofmt -d internal/server/setup_wizard_test.go || true
