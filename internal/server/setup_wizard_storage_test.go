@@ -161,7 +161,7 @@ func TestSetupWizardBackupStepSupportsLocalNFSAndSMBWithoutPasswordDraft(t *test
 		"direction":          {"next"},
 	}
 	rr := httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/backups", smb.Encode()))
-	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/setup" {
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/setup/review" {
 		t.Fatalf("SMB backup draft returned %d %q: %s", rr.Code, rr.Header().Get("Location"), rr.Body.String())
 	}
 	draft, ok := firstRunSetupDrafts.get(app, "session-token")
