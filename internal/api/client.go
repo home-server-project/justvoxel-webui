@@ -169,15 +169,33 @@ func (c *Client) doMinecraftAction(ctx context.Context, path, session string, bo
 		return out, fmt.Errorf("management API returned invalid action response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		if out.Error != "" {
-			return out, &ResponseError{StatusCode: resp.StatusCode, Message: out.Error}
-		}
+		normalizeMinecraftActionMessage(&out)
 		if out.Message != "" {
 			return out, &ResponseError{StatusCode: resp.StatusCode, Message: out.Message}
 		}
 		return out, &ResponseError{StatusCode: resp.StatusCode}
 	}
 	return out, nil
+}
+
+func normalizeMinecraftActionMessage(out *MinecraftActionResponse) {
+	if out == nil {
+		return
+	}
+	switch {
+	case out.Reason == "restart_cooldown" && out.RetryAfterSeconds > 0:
+		minutes := out.RetryAfterSeconds / 60
+		seconds := out.RetryAfterSeconds % 60
+		if minutes > 0 {
+			out.Message = fmt.Sprintf("Restart available in %dm %02ds.", minutes, seconds)
+		} else {
+			out.Message = fmt.Sprintf("Restart available in %ds.", seconds)
+		}
+	case out.AdministratorResetRequired || out.Reason == "restart_limit_reached":
+		out.Message = "Restart unavailable. Administrator reset required."
+	case out.Error != "":
+		out.Message = out.Error
+	}
 }
 
 func (c *Client) do(ctx context.Context, method, path, session string, body any, out any) error {
