@@ -282,8 +282,8 @@ func (a *App) renderSetupWizard(w http.ResponseWriter, identity api.SessionInfo,
 		SystemMemory:             formatMemoryMiB(draft.Defaults.SystemMemoryMiB),
 		SystemReserveMinimum:     formatMemoryMiB(draft.Defaults.SystemReserveMinimumMiB),
 		SystemReserveRecommended: formatMemoryMiB(draft.Defaults.SystemReserveRecommendedMiB),
-		CanBack: draft.Started && draft.CurrentStep > 1,
-		CanNext: draft.Started && draft.CurrentStep < len(steps),
+		CanBack:                  draft.Started && draft.CurrentStep > 1,
+		CanNext:                  draft.Started && draft.CurrentStep < len(steps),
 	}
 	a.renderAdminDiscovery(w, "setup_wizard.html", data)
 }
