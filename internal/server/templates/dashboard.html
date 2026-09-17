@@ -7,21 +7,25 @@
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/app.js" defer></script>
 </head>
-<body>
+<body class="role-pending">
 <header>
   <div><strong>JustVoxel</strong><span>Minecraft Server Appliance</span></div>
   <nav>
-    <a href="/settings/authentication">Authentication</a>
-    <a href="/password">Change password</a>
+    <a href="/activity">Activity</a>
+    <a class="role-admin-or-operator" href="/operations">Operations</a>
+    <a class="role-admin" href="/settings/activity">Admin activity</a>
+    <a class="role-admin" href="/settings/users">Users</a>
+    <a class="role-admin" href="/settings/authentication">Authentication</a>
+    <a class="role-admin" href="/password">Change password</a>
     <form method="post" action="/logout">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
       <button class="secondary" type="submit">Log out</button>
     </form>
   </nav>
 </header>
-<main id="dashboard" data-dashboard-status="/api/dashboard-status" data-pending-action="{{.PendingAction}}">
+<main id="dashboard" data-dashboard-status="/api/dashboard-status" data-session-info="/api/session-info" data-pending-action="{{.PendingAction}}">
   <div class="title-row">
-    <div><p class="eyebrow">Dashboard</p><h1>Server overview</h1></div>
+    <div><p class="eyebrow">Dashboard · <span id="session-role">loading role</span></p><h1>Server overview</h1></div>
     <span class="badge">{{.Status.System.Variant}}</span>
   </div>
 
@@ -29,7 +33,7 @@
   {{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}
 
   {{if .ConfirmAction}}
-  <section class="panel confirmation">
+  <section class="panel confirmation {{if eq .ConfirmAction "stop"}}role-admin{{else}}role-admin-or-operator{{end}}">
     <p class="eyebrow">Confirmation required</p>
     <h2>Players are online</h2>
     <p>{{.ConfirmOnline}} player{{if ne .ConfirmOnline 1}}s are{{else}} is{{end}} currently online. {{.ConfirmOperation}} will disconnect {{if eq .ConfirmOnline 1}}that player{{else}}those players{{end}}.</p>
@@ -61,12 +65,13 @@
       <div><p class="eyebrow">Minecraft</p><h2>Server control</h2></div>
       <span class="state-text" id="minecraft-control-state">{{.Status.Minecraft.State}}</span>
     </div>
-    <div class="action-row">
+    <p class="viewer-only muted compact">Viewer access is read-only. Server controls are intentionally unavailable.</p>
+    <div class="action-row role-admin-or-operator">
       <form method="post" action="/minecraft/start" class="action-form" data-progress="Starting…" data-minecraft-action="start">
         <input type="hidden" name="csrf" value="{{.CSRF}}">
         <button type="submit" {{if or .PendingAction (not .Status.Minecraft.Configured) (eq .Status.Minecraft.State "Running")}}disabled{{end}}>Start</button>
       </form>
-      <form method="post" action="/minecraft/stop" class="action-form" data-progress="Stopping…" data-minecraft-action="stop">
+      <form method="post" action="/minecraft/stop" class="action-form role-admin" data-progress="Stopping…" data-minecraft-action="stop">
         <input type="hidden" name="csrf" value="{{.CSRF}}">
         <button class="secondary" type="submit" {{if or .PendingAction (ne .Status.Minecraft.State "Running")}}disabled{{end}}>Stop</button>
       </form>
