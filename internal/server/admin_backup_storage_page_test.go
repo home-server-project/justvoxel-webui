@@ -80,7 +80,7 @@ func TestBackupStoragePageShowsSafeChoicesAndClearDestructiveGuidance(t *testing
 	for _, want := range []string{
 		"Backup storage", "Backup destination is ready.", "40.0 GiB", "Same physical disk",
 		"/dev/vdb1", "Virtual Disk", "NFS network share", "SMB / CIFS network share",
-		"never erases or formats", "ERASE /dev/sdb", "user will not have to guess what to type",
+		"Advanced storage", "/settings/storage-provision", "ERASE /dev/sdb", "exact typed confirmation phrase",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("backup storage page missing %q", want)
