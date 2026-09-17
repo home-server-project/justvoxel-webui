@@ -1,0 +1,70 @@
+{{define "server_settings.html"}}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JustVoxel - Minecraft settings</title><link rel="stylesheet" href="/static/app.css"><script src="/static/app.js" defer></script></head>
+<body class="role-administrator">{{template "app-header" .}}
+<main>
+  <div class="title-row"><div><p class="eyebrow">Administrator · discovery</p><h1>Minecraft settings</h1></div><span class="badge">{{.Identity.Username}}</span></div>
+  <p class="muted">Read-only configuration inventory. Editing arrives in the next management phase.</p>
+
+  {{if .Configuration.Configured}}
+  <section class="grid">
+    <article class="card"><span>Configuration</span><strong>Active</strong></article>
+    <article class="card"><span>Minecraft</span><strong>{{.Configuration.Minecraft.Version}}</strong></article>
+    <article class="card"><span>Java heap</span><strong>{{.Configuration.Minecraft.JavaMemory}}</strong></article>
+    <article class="card"><span>Maximum players</span><strong>{{.Configuration.Minecraft.MaxPlayers}}</strong></article>
+  </section>
+
+  <section class="panel details">
+    <div class="section-heading"><div><p class="eyebrow">Minecraft</p><h2>Current configuration</h2></div></div>
+    <dl>
+      <div><dt>Data directory</dt><dd><code>{{.Configuration.Minecraft.DataPath}}</code></dd></div>
+      {{if .Configuration.Minecraft.DataMountPoint}}<div><dt>Data mount</dt><dd><code>{{.Configuration.Minecraft.DataMountPoint}}</code></dd></div>{{end}}
+      <div><dt>Java heap</dt><dd>{{.Configuration.Minecraft.JavaMemory}}</dd></div>
+      <div><dt>Maximum Minecraft memory</dt><dd>{{.Configuration.Minecraft.ContainerMemory}}</dd></div>
+      <div><dt>Java port</dt><dd>{{.Configuration.Minecraft.JavaPort}}/tcp</dd></div>
+      <div><dt>Bedrock</dt><dd>{{if .Configuration.Minecraft.BedrockEnabled}}Enabled · {{.Configuration.Minecraft.BedrockPort}}/udp{{else}}Disabled{{end}}</dd></div>
+      <div><dt>Timezone</dt><dd>{{.Configuration.Minecraft.Timezone}}</dd></div>
+      <div><dt>Maximum players</dt><dd>{{.Configuration.Minecraft.MaxPlayers}}</dd></div>
+      <div><dt>MOTD</dt><dd>{{.Configuration.Minecraft.MOTD}}</dd></div>
+      <div><dt>Container image tag</dt><dd>{{.Configuration.Minecraft.ImageTag}}</dd></div>
+      <div><dt>Version policy</dt><dd>{{.Configuration.Minecraft.VersionMode}} · {{.Configuration.Minecraft.Version}}</dd></div>
+      <div><dt>Game mode</dt><dd>{{.Configuration.Minecraft.GameMode}}</dd></div>
+      <div><dt>Difficulty</dt><dd>{{.Configuration.Minecraft.Difficulty}}</dd></div>
+      <div><dt>Whitelist</dt><dd>{{if .Configuration.Minecraft.WhitelistEnabled}}Enabled{{else}}Disabled{{end}}{{if .Configuration.Minecraft.EnforceWhitelist}} · enforced{{end}}</dd></div>
+    </dl>
+  </section>
+
+  <section class="panel details">
+    <div class="section-heading"><div><p class="eyebrow">Backups</p><h2>Current policy</h2></div></div>
+    <dl>
+      <div><dt>Type</dt><dd>{{.Configuration.Backup.Type}}</dd></div>
+      <div><dt>Directory</dt><dd><code>{{.Configuration.Backup.Path}}</code></dd></div>
+      {{if .Configuration.Backup.MountPoint}}<div><dt>Mount</dt><dd><code>{{.Configuration.Backup.MountPoint}}</code></dd></div>{{end}}
+      <div><dt>Backups retained</dt><dd>{{.Configuration.Backup.Keep}}</dd></div>
+      <div><dt>Automatic backup</dt><dd>{{if .Configuration.Backup.TimerEnabled}}Enabled{{else}}Disabled{{end}}</dd></div>
+      <div><dt>Schedule</dt><dd><code>{{.Configuration.Backup.Schedule}}</code></dd></div>
+    </dl>
+  </section>
+  {{else}}
+  <div class="notice">Minecraft is not configured yet. The values below are the safe defaults JustVoxel would suggest during first setup.</div>
+  {{end}}
+
+  <section class="panel details">
+    <div class="section-heading"><div><p class="eyebrow">Setup foundation</p><h2>Suggested defaults</h2></div></div>
+    <dl>
+      <div><dt>Minecraft data</dt><dd><code>{{.Defaults.DataPath}}</code></dd></div>
+      <div><dt>Backup directory</dt><dd><code>{{.Defaults.BackupPath}}</code></dd></div>
+      <div><dt>Java heap</dt><dd>{{.Defaults.JavaMemory}}</dd></div>
+      <div><dt>Maximum Minecraft memory</dt><dd>{{.Defaults.ContainerMemory}}</dd></div>
+      <div><dt>Java port</dt><dd>{{.Defaults.JavaPort}}/tcp</dd></div>
+      <div><dt>Bedrock default</dt><dd>{{if .Defaults.BedrockEnabled}}Enabled{{else}}Disabled{{end}} · {{.Defaults.BedrockPort}}/udp</dd></div>
+      <div><dt>Timezone</dt><dd>{{.Defaults.Timezone}}</dd></div>
+      <div><dt>Maximum players</dt><dd>{{.Defaults.MaxPlayers}}</dd></div>
+      <div><dt>MOTD</dt><dd>{{.Defaults.MOTD}}</dd></div>
+      <div><dt>Container channel</dt><dd>{{.Defaults.ImageTag}}</dd></div>
+      <div><dt>Version policy</dt><dd>{{.Defaults.VersionMode}}</dd></div>
+      <div><dt>Backup retention</dt><dd>{{.Defaults.BackupKeep}}</dd></div>
+      <div><dt>Daily backup time</dt><dd>{{.Defaults.BackupDailyTime}}</dd></div>
+    </dl>
+  </section>
+  <p class="foot">WebUI {{.Version}} · Management API {{.ManagementAPI}}</p>
+</main></body></html>{{end}}
