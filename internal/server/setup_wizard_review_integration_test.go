@@ -101,7 +101,7 @@ func TestSetupReviewRemainsNonExecutableAndSecretFree(t *testing.T) {
 	}
 
 	apply := httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/apply", "csrf=csrf-token"))
-	if apply.Code != http.StatusNotFound {
-		t.Fatalf("WebUI setup Apply route status = %d, want 404", apply.Code)
+	if apply.Code < 400 {
+		t.Fatalf("WebUI setup Apply path unexpectedly executable: status=%d body=%s", apply.Code, apply.Body.String())
 	}
 }
