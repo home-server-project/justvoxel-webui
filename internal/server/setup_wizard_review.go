@@ -234,7 +234,7 @@ func (a *App) renderSetupReview(w http.ResponseWriter, identity api.SessionInfo,
 		CSRF: csrf, Identity: identity, Plan: plan, Error: errorMessage,
 		EULAAccepted: state.EULAAccepted, EULAURL: minecraftEULAURL,
 		StorageLabel: setupStorageTypeLabel(plan.Normalized.Storage.Type),
-		BackupLabel: setupBackupTypeLabel(plan.Normalized.Backups.Type),
+		BackupLabel:  setupBackupTypeLabel(plan.Normalized.Backups.Type),
 		VersionLabel: setupVersionPolicyLabel(plan.Normalized.Minecraft.RequestedVersionPolicy),
 	}
 	if plan.Normalized.Storage.SizeBytes > 0 {
