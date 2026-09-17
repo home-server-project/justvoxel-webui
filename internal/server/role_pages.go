@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -68,15 +69,13 @@ func (a *App) registerRolePages(mux *http.ServeMux) {
 }
 
 func (a *App) sessionInfo(w http.ResponseWriter, r *http.Request) {
-	session, client, identity, ok := a.rolePageRequest(w, r)
-	_ = session
-	_ = client
+	_, _, identity, ok := a.rolePageRequest(w, r)
 	if !ok {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := writeJSONResponse(w, identity); err != nil {
+	if err := json.NewEncoder(w).Encode(identity); err != nil {
 		http.Error(w, "could not encode session", http.StatusInternalServerError)
 	}
 }
@@ -312,12 +311,4 @@ func (a *App) renderAdminActivity(w http.ResponseWriter, data adminActivityPageD
 	if err := a.templates.ExecuteTemplate(w, "admin_activity.html", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
-}
-
-func writeJSONResponse(w http.ResponseWriter, value any) error {
-	return jsonEncoder(w, value)
-}
-
-var jsonEncoder = func(w http.ResponseWriter, value any) error {
-	return json.NewEncoder(w).Encode(value)
 }
