@@ -56,14 +56,14 @@ type AdminStorageProvisionPlan struct {
 }
 
 type AdminStorageProvisionResponse struct {
-	OK              bool                            `json:"ok"`
-	Error           string                          `json:"error,omitempty"`
-	Warnings        []string                        `json:"warnings"`
+	OK              bool                             `json:"ok"`
+	Error           string                           `json:"error,omitempty"`
+	Warnings        []string                         `json:"warnings"`
 	WholeDisks      []AdminStorageProvisionCandidate `json:"whole_disks,omitempty"`
 	BlankPartitions []AdminStorageProvisionCandidate `json:"blank_partitions,omitempty"`
 	FreeSpaceDisks  []AdminStorageProvisionCandidate `json:"free_space_disks,omitempty"`
-	Proposed        AdminStorageProvisionPlan       `json:"proposed"`
-	Applied         bool                            `json:"applied"`
+	Proposed        AdminStorageProvisionPlan        `json:"proposed"`
+	Applied         bool                             `json:"applied"`
 }
 
 func (c *Client) AdminStorageProvisionDiscover(ctx context.Context, session string) (AdminStorageProvisionResponse, error) {
