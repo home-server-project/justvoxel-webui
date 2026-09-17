@@ -1,0 +1,168 @@
+package server
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/home-server-project/justvoxel-webui/internal/api"
+)
+
+type adminDiscoveryAPI interface {
+	Session(ctx context.Context, session string) (api.SessionInfo, error)
+	AdminConfiguration(ctx context.Context, session string) (api.AdminConfigurationDiscovery, error)
+	AdminStorage(ctx context.Context, session string) (api.AdminStorageDiscovery, error)
+	AdminSetupDefaults(ctx context.Context, session string) (api.AdminSetupDefaults, error)
+}
+
+type serverSettingsPageData struct {
+	Title         string
+	Version       string
+	ManagementAPI string
+	CSRF          string
+	Identity      api.SessionInfo
+	Configuration api.AdminConfigurationDiscovery
+	Defaults      api.AdminSetupDefaults
+}
+
+type storageDeviceView struct {
+	Name        string
+	Path        string
+	Type        string
+	Size        string
+	Filesystem  string
+	Label       string
+	UUID        string
+	Mountpoints string
+	Model       string
+	Transport   string
+	ReadOnly    bool
+	System      bool
+}
+
+type storageSettingsPageData struct {
+	Title         string
+	Version       string
+	ManagementAPI string
+	CSRF          string
+	Identity      api.SessionInfo
+	Configuration api.AdminConfigurationDiscovery
+	SystemDisks   []string
+	Devices       []storageDeviceView
+}
+
+func (a *App) registerAdminDiscoveryPages(mux *http.ServeMux) {
+	mux.HandleFunc("GET /settings/server", a.serverSettingsPage)
+	mux.HandleFunc("GET /settings/storage", a.storageSettingsPage)
+}
+
+func (a *App) serverSettingsPage(w http.ResponseWriter, r *http.Request) {
+	session, client, identity, ok := a.adminDiscoveryRequest(w, r)
+	if !ok {
+		return
+	}
+	configuration, err := client.AdminConfiguration(r.Context(), session)
+	if err != nil {
+		a.handleAdminDiscoveryError(w, r, err)
+		return
+	}
+	defaults, err := client.AdminSetupDefaults(r.Context(), session)
+	if err != nil {
+		a.handleAdminDiscoveryError(w, r, err)
+		return
+	}
+	a.renderAdminDiscovery(w, "server_settings.html", serverSettingsPageData{
+		Title: "Minecraft settings", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI,
+		CSRF: csrfFromRequest(r), Identity: identity, Configuration: configuration, Defaults: defaults,
+	})
+}
+
+func (a *App) storageSettingsPage(w http.ResponseWriter, r *http.Request) {
+	session, client, identity, ok := a.adminDiscoveryRequest(w, r)
+	if !ok {
+		return
+	}
+	configuration, err := client.AdminConfiguration(r.Context(), session)
+	if err != nil {
+		a.handleAdminDiscoveryError(w, r, err)
+		return
+	}
+	storage, err := client.AdminStorage(r.Context(), session)
+	if err != nil {
+		a.handleAdminDiscoveryError(w, r, err)
+		return
+	}
+	devices := make([]storageDeviceView, 0, len(storage.Devices))
+	for _, device := range storage.Devices {
+		devices = append(devices, storageDeviceView{
+			Name: device.Name, Path: device.Path, Type: device.Type, Size: humanBytes(device.SizeBytes),
+			Filesystem: device.Filesystem, Label: device.Label, UUID: device.UUID,
+			Mountpoints: strings.Join(device.Mountpoints, ", "), Model: device.Model, Transport: device.Transport,
+			ReadOnly: device.ReadOnly, System: device.System,
+		})
+	}
+	a.renderAdminDiscovery(w, "storage_settings.html", storageSettingsPageData{
+		Title: "Storage overview", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI,
+		CSRF: csrfFromRequest(r), Identity: identity, Configuration: configuration,
+		SystemDisks: storage.SystemDisks, Devices: devices,
+	})
+}
+
+func (a *App) adminDiscoveryRequest(w http.ResponseWriter, r *http.Request) (string, adminDiscoveryAPI, api.SessionInfo, bool) {
+	session, ok := sessionFromRequest(r)
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return "", nil, api.SessionInfo{}, false
+	}
+	client, ok := a.api.(adminDiscoveryAPI)
+	if !ok {
+		http.Error(w, "appliance discovery is unavailable", http.StatusServiceUnavailable)
+		return "", nil, api.SessionInfo{}, false
+	}
+	identity, err := client.Session(r.Context(), session)
+	if err != nil {
+		a.handleAdminDiscoveryError(w, r, err)
+		return "", nil, api.SessionInfo{}, false
+	}
+	if identity.Role != "administrator" {
+		http.Error(w, "Administrator access required", http.StatusForbidden)
+		return "", nil, api.SessionInfo{}, false
+	}
+	return session, client, identity, true
+}
+
+func (a *App) handleAdminDiscoveryError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, api.ErrUnauthorized) {
+		a.clearSessionCookies(w)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if errors.Is(err, api.ErrPasswordChangeRequired) {
+		http.Redirect(w, r, "/password", http.StatusSeeOther)
+		return
+	}
+	http.Error(w, "appliance discovery is unavailable", http.StatusBadGateway)
+}
+
+func (a *App) renderAdminDiscovery(w http.ResponseWriter, name string, data any) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := a.templates.ExecuteTemplate(w, name, data); err != nil {
+		http.Error(w, "render error", http.StatusInternalServerError)
+	}
+}
+
+func humanBytes(value uint64) string {
+	const unit = uint64(1024)
+	if value < unit {
+		return fmt.Sprintf("%d B", value)
+	}
+	div, exp := unit, 0
+	for n := value / unit; n >= unit && exp < 5; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(value)/float64(div), "KMGTPE"[exp])
+}
