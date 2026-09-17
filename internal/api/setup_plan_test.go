@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const setupPlanTestFingerprint = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 func setupPlanTestRequest() AdminSetupPlanRequest {
 	return AdminSetupPlanRequest{
 		Server: AdminSetupPlanServerRequest{
@@ -89,6 +91,7 @@ func TestAdminSetupPlanClientContract(t *testing.T) {
 			Body: io.NopCloser(strings.NewReader(`{
 				"ok":true,
 				"schema_version":"v1",
+				"plan_fingerprint":"` + setupPlanTestFingerprint + `",
 				"normalized":{
 					"server":{"motd":"Family Minecraft","max_players":10,"bedrock_enabled":true,"timezone":"America/Toronto"},
 					"minecraft":{"java_memory":"6G","container_memory":"8G","java_port":25565,"bedrock_port":19132,"image_tag":"stable","requested_version_policy":"recommended","version_policy":"pinned","version":"1.21.8","system_memory_mib":16384,"system_reserve_mib":8192},
@@ -108,6 +111,9 @@ func TestAdminSetupPlanClientContract(t *testing.T) {
 	}
 	if !plan.OK || plan.SchemaVersion != "v1" {
 		t.Fatalf("unexpected setup plan envelope: %#v", plan)
+	}
+	if plan.PlanFingerprint != setupPlanTestFingerprint {
+		t.Fatalf("fingerprint = %q, want %q", plan.PlanFingerprint, setupPlanTestFingerprint)
 	}
 	if plan.Normalized.Minecraft.VersionPolicy != "pinned" || plan.Normalized.Minecraft.Version != "1.21.8" {
 		t.Fatalf("normalized Minecraft policy not preserved: %#v", plan.Normalized.Minecraft)
@@ -151,6 +157,9 @@ func TestAdminSetupPlanPreservesValidationResponse(t *testing.T) {
 	}
 	if plan.Code != "invalid_storage_layout" || len(plan.Warnings) != 1 {
 		t.Fatalf("structured validation response was not preserved: %#v", plan)
+	}
+	if plan.PlanFingerprint != "" {
+		t.Fatalf("invalid plan unexpectedly received fingerprint %q", plan.PlanFingerprint)
 	}
 }
 
@@ -238,7 +247,7 @@ func TestAdminSetupPlanClientHasNoApplySurface(t *testing.T) {
 	text := string(source)
 	for _, forbidden := range []string{"/v1/admin/setup/apply", "AdminSetupApply"} {
 		if strings.Contains(text, forbidden) {
-			t.Fatalf("A4.4.3 must not expose setup Apply surface: found %q", forbidden)
+			t.Fatalf("A4.4.5 must not expose setup Apply surface: found %q", forbidden)
 		}
 	}
 }
