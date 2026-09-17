@@ -31,14 +31,14 @@
 
   <section class="panel details">
     <div class="section-heading"><div><p class="eyebrow">Discovered storage</p><h2>Devices & filesystems</h2></div></div>
-    <div class="storage-device-list">
+    <div class="user-list">
     {{range .Devices}}
-      <article class="storage-device-card">
+      <article class="user-card">
         <div class="user-card-heading">
           <div><strong>{{if .Model}}{{.Model}}{{else}}{{.Name}}{{end}}</strong><span class="muted"><code>{{.Path}}</code> · {{.Type}} · {{.Size}}</span></div>
           {{if .System}}<span class="badge">System</span>{{else if .ReadOnly}}<span class="badge">Read only</span>{{end}}
         </div>
-        <dl class="storage-device-details">
+        <dl class="user-details">
           {{if .Filesystem}}<div><dt>Filesystem</dt><dd>{{.Filesystem}}</dd></div>{{end}}
           {{if .Label}}<div><dt>Label</dt><dd>{{.Label}}</dd></div>{{end}}
           {{if .UUID}}<div><dt>UUID</dt><dd><code>{{.UUID}}</code></dd></div>{{end}}
