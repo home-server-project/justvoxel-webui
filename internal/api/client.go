@@ -65,13 +65,23 @@ type Players struct {
 }
 
 type MinecraftActionResponse struct {
-	OK                   bool     `json:"ok"`
-	Action               string   `json:"action,omitempty"`
-	Message              string   `json:"message,omitempty"`
-	ConfirmationRequired bool     `json:"confirmation_required,omitempty"`
-	Reason               string   `json:"reason,omitempty"`
-	Players              []string `json:"players,omitempty"`
-	Online               int      `json:"online,omitempty"`
+	OK                         bool     `json:"ok"`
+	Action                     string   `json:"action,omitempty"`
+	Message                    string   `json:"message,omitempty"`
+	Error                      string   `json:"error,omitempty"`
+	ConfirmationRequired       bool     `json:"confirmation_required,omitempty"`
+	Reason                     string   `json:"reason,omitempty"`
+	Players                    []string `json:"players,omitempty"`
+	Online                     int      `json:"online,omitempty"`
+	RestartUsed                int      `json:"restart_used,omitempty"`
+	RestartLimit               int      `json:"restart_limit,omitempty"`
+	RetryAfterSeconds          int      `json:"retry_after_seconds,omitempty"`
+	AdministratorResetRequired bool     `json:"administrator_reset_required,omitempty"`
+	OperatorUsage              *struct {
+		RestartUsed     int `json:"restart_used"`
+		RestartLimit    int `json:"restart_limit"`
+		CooldownSeconds int `json:"cooldown_seconds"`
+	} `json:"operator_usage,omitempty"`
 }
 
 func NewClient(socket string) *Client {
@@ -159,10 +169,13 @@ func (c *Client) doMinecraftAction(ctx context.Context, path, session string, bo
 		return out, fmt.Errorf("management API returned invalid action response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		if out.Message != "" {
-			return out, errors.New(out.Message)
+		if out.Error != "" {
+			return out, &ResponseError{StatusCode: resp.StatusCode, Message: out.Error}
 		}
-		return out, fmt.Errorf("management API %s", resp.Status)
+		if out.Message != "" {
+			return out, &ResponseError{StatusCode: resp.StatusCode, Message: out.Message}
+		}
+		return out, &ResponseError{StatusCode: resp.StatusCode}
 	}
 	return out, nil
 }
