@@ -123,6 +123,9 @@ func (a *App) setupWizardPage(w http.ResponseWriter, r *http.Request) {
 	draft, exists := firstRunSetupDrafts.get(a, session)
 	if !exists {
 		draft = setupDraft{}
+	} else if draft.Started && draft.CurrentStep == 5 {
+		http.Redirect(w, r, "/setup/review", http.StatusSeeOther)
+		return
 	} else if draft.Started && (draft.CurrentStep == 3 || draft.CurrentStep == 4) {
 		storage, err := client.AdminStorage(r.Context(), session)
 		if err != nil {
@@ -150,6 +153,7 @@ func (a *App) setupWizardStart(w http.ResponseWriter, r *http.Request) {
 		a.handleAdminDiscoveryError(w, r, err)
 		return
 	}
+	firstRunSetupReviews.delete(a, session)
 	firstRunSetupDrafts.start(a, session, normalizedSetupDefaults(defaults), storage)
 	http.Redirect(w, r, "/setup", http.StatusSeeOther)
 }
@@ -180,6 +184,7 @@ func (a *App) setupWizardSaveServer(w http.ResponseWriter, r *http.Request) {
 	}
 	draft.Server.Complete = true
 	draft.CurrentStep = 2
+	firstRunSetupReviews.delete(a, session)
 	firstRunSetupDrafts.save(a, session, draft)
 	http.Redirect(w, r, "/setup", http.StatusSeeOther)
 }
@@ -208,6 +213,7 @@ func (a *App) setupWizardSaveMinecraft(w http.ResponseWriter, r *http.Request) {
 	if r.FormValue("direction") == "back" {
 		draft.Minecraft.Complete = false
 		draft.CurrentStep = 1
+		firstRunSetupReviews.delete(a, session)
 		firstRunSetupDrafts.save(a, session, draft)
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 		return
@@ -227,6 +233,7 @@ func (a *App) setupWizardSaveMinecraft(w http.ResponseWriter, r *http.Request) {
 		draft.Minecraft.Version = ""
 	}
 	draft.CurrentStep = 3
+	firstRunSetupReviews.delete(a, session)
 	firstRunSetupDrafts.save(a, session, draft)
 	http.Redirect(w, r, "/setup", http.StatusSeeOther)
 }
@@ -245,6 +252,7 @@ func (a *App) setupWizardNavigate(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 		return
 	}
+	firstRunSetupReviews.delete(a, session)
 	http.Redirect(w, r, "/setup", http.StatusSeeOther)
 }
 
@@ -253,6 +261,7 @@ func (a *App) setupWizardCancel(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	firstRunSetupReviews.delete(a, session)
 	firstRunSetupDrafts.delete(a, session)
 	http.Redirect(w, r, "/setup", http.StatusSeeOther)
 }
@@ -272,6 +281,7 @@ func (a *App) setupWizardRequest(w http.ResponseWriter, r *http.Request, require
 		return "", nil, api.SessionInfo{}, false
 	}
 	if configuration.Configured {
+		firstRunSetupReviews.delete(a, session)
 		firstRunSetupDrafts.delete(a, session)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return "", nil, api.SessionInfo{}, false
@@ -515,7 +525,7 @@ func (s *setupDraftStore) navigate(app *App, session, direction string) bool {
 	switch direction {
 	case "next":
 		// Steps 1-4 have real forms and cannot be skipped through the generic
-		// navigation endpoint. Review remains read-only until A4.4.
+		// navigation endpoint. The validated Review has its own route.
 		if draft.CurrentStep <= 4 {
 			return false
 		}
