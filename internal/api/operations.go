@@ -2,13 +2,21 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 )
 
 type ManualBackupResponse struct {
-	OK      bool   `json:"ok"`
-	Message string `json:"message"`
+	OK                         bool   `json:"ok"`
+	Message                    string `json:"message"`
+	Error                      string `json:"error,omitempty"`
+	Reason                     string `json:"reason,omitempty"`
+	BackupUsed                 int    `json:"backup_used,omitempty"`
+	BackupLimit                int    `json:"backup_limit,omitempty"`
+	RetryAfterSeconds          int    `json:"retry_after_seconds,omitempty"`
+	AdministratorResetRequired bool   `json:"administrator_reset_required,omitempty"`
 	OperatorUsage *struct {
 		BackupUsed      int `json:"backup_used"`
 		BackupLimit     int `json:"backup_limit"`
@@ -66,8 +74,34 @@ type NotificationsResponse struct {
 
 func (c *Client) ManualBackup(ctx context.Context, session string) (ManualBackupResponse, error) {
 	var out ManualBackupResponse
-	err := c.do(ctx, http.MethodPost, "/v1/backups/manual", session, nil, &out)
-	return out, err
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://unix/v1/backups/manual", nil)
+	if err != nil {
+		return out, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+session)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return out, fmt.Errorf("management API unavailable: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return out, ErrUnauthorized
+	}
+	if resp.StatusCode == http.StatusForbidden {
+		return out, ErrPasswordChangeRequired
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&out); err != nil {
+		return out, fmt.Errorf("management API returned invalid backup response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		message := out.Error
+		if message == "" {
+			message = out.Message
+		}
+		return out, &ResponseError{StatusCode: resp.StatusCode, Message: message}
+	}
+	return out, nil
 }
 
 func (c *Client) Whitelist(ctx context.Context, session string) (TextOutputResponse, error) {
