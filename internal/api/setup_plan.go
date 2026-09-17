@@ -142,13 +142,14 @@ type AdminSetupPlanRequirements struct {
 }
 
 type AdminSetupPlanResponse struct {
-	OK            bool                       `json:"ok"`
-	SchemaVersion string                     `json:"schema_version"`
-	Code          string                     `json:"code,omitempty"`
-	Error         string                     `json:"error,omitempty"`
-	Normalized    AdminSetupNormalizedPlan   `json:"normalized,omitempty"`
-	Warnings      []AdminSetupPlanWarning    `json:"warnings"`
-	Requirements  AdminSetupPlanRequirements `json:"requirements,omitempty"`
+	OK              bool                       `json:"ok"`
+	SchemaVersion   string                     `json:"schema_version"`
+	PlanFingerprint string                     `json:"plan_fingerprint,omitempty"`
+	Code            string                     `json:"code,omitempty"`
+	Error           string                     `json:"error,omitempty"`
+	Normalized      AdminSetupNormalizedPlan   `json:"normalized,omitempty"`
+	Warnings        []AdminSetupPlanWarning    `json:"warnings"`
+	Requirements    AdminSetupPlanRequirements `json:"requirements,omitempty"`
 }
 
 func (c *Client) AdminSetupPlan(ctx context.Context, session string, request AdminSetupPlanRequest) (AdminSetupPlanResponse, error) {
