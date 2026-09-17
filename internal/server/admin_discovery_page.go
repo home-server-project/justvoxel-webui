@@ -66,6 +66,7 @@ func (a *App) registerAdminDiscoveryPages(mux *http.ServeMux) {
 	mux.HandleFunc("POST /settings/server/apply", a.serverSettingsApply)
 	mux.HandleFunc("GET /settings/storage", a.storageSettingsPage)
 	a.registerAdminBackupStoragePages(mux)
+	a.registerAdminStorageProvisionPages(mux)
 }
 
 func (a *App) serverSettingsPage(w http.ResponseWriter, r *http.Request) {
