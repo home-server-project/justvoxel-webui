@@ -56,7 +56,7 @@ func (f *fakeDiscoveryAPI) AdminSetupDefaults(_ context.Context, session string)
 	return f.defaults, nil
 }
 
-func TestServerSettingsShowsCurrentConfigurationAndDefaults(t *testing.T) {
+func TestServerSettingsShowsCurrentConfiguration(t *testing.T) {
 	client := &fakeDiscoveryAPI{}
 	client.configuration.Configured = true
 	client.configuration.Minecraft.DataPath = "/var/lib/justvoxel/minecraft"
@@ -69,6 +69,7 @@ func TestServerSettingsShowsCurrentConfigurationAndDefaults(t *testing.T) {
 	client.configuration.Backup.Type = "system"
 	client.configuration.Backup.Path = "/var/lib/justvoxel/backups"
 	client.configuration.Backup.Keep = 7
+	client.configuration.Backup.Schedule = "*-*-* 04:30:00"
 	client.defaults.JavaMemory = "4G"
 	client.defaults.ContainerMemory = "6G"
 	client.defaults.DataPath = "/var/lib/justvoxel/minecraft"
@@ -78,6 +79,9 @@ func TestServerSettingsShowsCurrentConfigurationAndDefaults(t *testing.T) {
 	client.defaults.MaxPlayers = 10
 	client.defaults.BackupKeep = 7
 	client.defaults.BackupDailyTime = "04:30"
+	client.defaults.SystemMemoryMiB = 8192
+	client.defaults.SystemReserveMinimumMiB = 1024
+	client.defaults.SystemReserveRecommendedMiB = 2048
 
 	app, err := New(client, Config{Version: "test", ManagementAPI: "v1"})
 	if err != nil {
@@ -89,7 +93,7 @@ func TestServerSettingsShowsCurrentConfigurationAndDefaults(t *testing.T) {
 		t.Fatalf("server settings returned %d: %s", rr.Code, rr.Body.String())
 	}
 	body := rr.Body.String()
-	for _, want := range []string{"Minecraft settings", "Current configuration", "/var/lib/justvoxel/minecraft", "4G", "6G", "1.21.8", "/var/lib/justvoxel/backups", "Suggested defaults"} {
+	for _, want := range []string{"Minecraft settings", "/var/lib/justvoxel/minecraft", "4G", "6G", "1.21.8", "/var/lib/justvoxel/backups", "Review changes"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("server settings missing %q", want)
 		}
@@ -105,6 +109,9 @@ func TestServerSettingsSupportsUnconfiguredAppliance(t *testing.T) {
 	client.defaults.BackupPath = "/var/lib/justvoxel/backups"
 	client.defaults.JavaMemory = "4G"
 	client.defaults.ContainerMemory = "6G"
+	client.defaults.SystemMemoryMiB = 8192
+	client.defaults.SystemReserveMinimumMiB = 1024
+	client.defaults.SystemReserveRecommendedMiB = 2048
 
 	app, err := New(client, Config{Version: "test", ManagementAPI: "v1"})
 	if err != nil {
@@ -115,8 +122,10 @@ func TestServerSettingsSupportsUnconfiguredAppliance(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("unconfigured settings returned %d: %s", rr.Code, rr.Body.String())
 	}
-	if !strings.Contains(rr.Body.String(), "Minecraft is not configured yet") {
-		t.Fatalf("missing unconfigured state: %s", rr.Body.String())
+	for _, want := range []string{"Minecraft is not configured yet", "Suggested defaults", "8.0 GiB", "2.0 GiB", "1.0 GiB"} {
+		if !strings.Contains(rr.Body.String(), want) {
+			t.Fatalf("missing unconfigured state %q: %s", want, rr.Body.String())
+		}
 	}
 }
 

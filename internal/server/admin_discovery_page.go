@@ -18,13 +18,20 @@ type adminDiscoveryAPI interface {
 }
 
 type serverSettingsPageData struct {
-	Title         string
-	Version       string
-	ManagementAPI string
-	CSRF          string
-	Identity      api.SessionInfo
-	Configuration api.AdminConfigurationDiscovery
-	Defaults      api.AdminSetupDefaults
+	Title                    string
+	Version                  string
+	ManagementAPI            string
+	CSRF                     string
+	Identity                 api.SessionInfo
+	Configuration            api.AdminConfigurationDiscovery
+	Defaults                 api.AdminSetupDefaults
+	Form                     api.AdminConfigurationChangeRequest
+	Plan                     *api.AdminConfigurationChangeResponse
+	Error                    string
+	Message                  string
+	SystemMemory             string
+	SystemReserveMinimum     string
+	SystemReserveRecommended string
 }
 
 type storageDeviceView struct {
@@ -55,6 +62,8 @@ type storageSettingsPageData struct {
 
 func (a *App) registerAdminDiscoveryPages(mux *http.ServeMux) {
 	mux.HandleFunc("GET /settings/server", a.serverSettingsPage)
+	mux.HandleFunc("POST /settings/server/plan", a.serverSettingsPlan)
+	mux.HandleFunc("POST /settings/server/apply", a.serverSettingsApply)
 	mux.HandleFunc("GET /settings/storage", a.storageSettingsPage)
 }
 
@@ -73,10 +82,17 @@ func (a *App) serverSettingsPage(w http.ResponseWriter, r *http.Request) {
 		a.handleAdminDiscoveryError(w, r, err)
 		return
 	}
-	a.renderAdminDiscovery(w, "server_settings.html", serverSettingsPageData{
-		Title: "Minecraft settings", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI,
-		CSRF: csrfFromRequest(r), Identity: identity, Configuration: configuration, Defaults: defaults,
-	})
+	message := ""
+	if r.URL.Query().Get("result") == "saved" {
+		if r.URL.Query().Get("restart") == "1" {
+			message = "Settings saved. Minecraft was not restarted; restart it when it is safe to apply the server changes."
+		} else {
+			message = "Settings saved and applied."
+		}
+	}
+	data := a.buildServerSettingsPageData(identity, configuration, defaults, configurationRequestFromDiscovery(configuration), nil, "", message)
+	data.CSRF = csrfFromRequest(r)
+	a.renderAdminDiscovery(w, "server_settings.html", data)
 }
 
 func (a *App) storageSettingsPage(w http.ResponseWriter, r *http.Request) {

@@ -66,20 +66,23 @@ type AdminStorageDiscovery struct {
 }
 
 type AdminSetupDefaults struct {
-	DataPath        string `json:"data_path"`
-	BackupPath      string `json:"backup_path"`
-	JavaMemory      string `json:"java_memory"`
-	ContainerMemory string `json:"container_memory"`
-	JavaPort        int    `json:"java_port"`
-	BedrockEnabled  bool   `json:"bedrock_enabled"`
-	BedrockPort     int    `json:"bedrock_port"`
-	Timezone        string `json:"timezone"`
-	MaxPlayers      int    `json:"max_players"`
-	MOTD            string `json:"motd"`
-	ImageTag        string `json:"image_tag"`
-	VersionMode     string `json:"version_mode"`
-	BackupKeep      int    `json:"backup_keep"`
-	BackupDailyTime string `json:"backup_daily_time"`
+	DataPath                    string `json:"data_path"`
+	BackupPath                  string `json:"backup_path"`
+	JavaMemory                  string `json:"java_memory"`
+	ContainerMemory             string `json:"container_memory"`
+	JavaPort                    int    `json:"java_port"`
+	BedrockEnabled              bool   `json:"bedrock_enabled"`
+	BedrockPort                 int    `json:"bedrock_port"`
+	Timezone                    string `json:"timezone"`
+	MaxPlayers                  int    `json:"max_players"`
+	MOTD                        string `json:"motd"`
+	ImageTag                    string `json:"image_tag"`
+	VersionMode                 string `json:"version_mode"`
+	BackupKeep                  int    `json:"backup_keep"`
+	BackupDailyTime             string `json:"backup_daily_time"`
+	SystemMemoryMiB             int    `json:"system_memory_mib"`
+	SystemReserveMinimumMiB     int    `json:"system_reserve_minimum_mib"`
+	SystemReserveRecommendedMiB int    `json:"system_reserve_recommended_mib"`
 }
 
 func (c *Client) AdminConfiguration(ctx context.Context, session string) (AdminConfigurationDiscovery, error) {
