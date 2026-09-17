@@ -17,7 +17,7 @@ type ManualBackupResponse struct {
 	BackupLimit                int    `json:"backup_limit,omitempty"`
 	RetryAfterSeconds          int    `json:"retry_after_seconds,omitempty"`
 	AdministratorResetRequired bool   `json:"administrator_reset_required,omitempty"`
-	OperatorUsage *struct {
+	OperatorUsage              *struct {
 		BackupUsed      int `json:"backup_used"`
 		BackupLimit     int `json:"backup_limit"`
 		CooldownSeconds int `json:"cooldown_seconds"`
