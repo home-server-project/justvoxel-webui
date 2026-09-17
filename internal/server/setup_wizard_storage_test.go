@@ -158,7 +158,7 @@ func TestSetupWizardBackupStepSupportsLocalNFSAndSMBWithoutPasswordDraft(t *test
 		"backup_domain":      {"HOME"},
 		"backup_mount_point": {"/var/mnt/justvoxel-backup"},
 		"backup_path":        {"/var/mnt/justvoxel-backup/backups"},
-		"direction":           {"next"},
+		"direction":          {"next"},
 	}
 	rr := httptestResponse(app, authenticatedAdminRequest(http.MethodPost, "http://example/setup/backups", smb.Encode()))
 	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/setup" {
