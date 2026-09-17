@@ -25,6 +25,7 @@ func TestGroupedHeaderNavigationUX(t *testing.T) {
 		`href="/operations#whitelist"`,
 		`href="/operations#minecraft-logs"`,
 		`href="/settings/storage"`,
+		`href="/settings/backup-storage"`,
 		`href="/operations#manual-backup"`,
 		`href="/settings/activity"`,
 		`href="/settings/users"`,
@@ -84,6 +85,7 @@ func TestAuthenticatedTemplatesUseSharedHeader(t *testing.T) {
 		"password.html",
 		"server_settings.html",
 		"storage_settings.html",
+		"backup_storage.html",
 	} {
 		content, err := assets.ReadFile("templates/" + name)
 		if err != nil {
