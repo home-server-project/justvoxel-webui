@@ -44,6 +44,7 @@ func (a *App) registerAdminUsersRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /settings/users/{id}/delete", a.adminDeleteUser)
 	mux.HandleFunc("POST /settings/users/{id}/restart-allowance/reset", a.adminResetRestartAllowance)
 	mux.HandleFunc("POST /settings/users/{id}/backup-allowance/reset", a.adminResetBackupAllowance)
+	a.registerRolePages(mux)
 }
 
 func (a *App) adminUsersPage(w http.ResponseWriter, r *http.Request) {
