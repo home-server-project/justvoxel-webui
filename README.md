@@ -27,6 +27,18 @@ A successful system-account login becomes a normal JustVoxel WebUI session. The 
 
 Administrators can optionally select **Separate WebUI password** mode. That provider uses its own WebUI-local credential and does not modify the Linux/console/SSH password.
 
+## Fixed WebUI roles
+
+JustVoxel intentionally exposes three fixed roles rather than a generic RBAC or permission editor:
+
+- **Administrator** - the permanent primary `voxel` identity. Full appliance administration, WebUI user management, Operator allowance resets, audit history, and action-required notifications.
+- **Operator** - a WebUI-only identity created by the Administrator. Can use day-to-day Minecraft controls such as Start, limited Restart, manual backup, whitelist management, recent Minecraft logs, and normal read-only status pages. Operator Stop and appliance-level administration remain unavailable.
+- **Viewer** - a WebUI-only read-only identity created by the Administrator. Can view dashboard, player, health, backup, version, and sanitized activity information without mutation controls.
+
+Operator and Viewer identities live only in the JustVoxel management database. They do not create Linux accounts and cannot sign in through SSH, PAM, or sudo.
+
+Operator Restart and manual Backup each have independent non-replenishing allowances of two accepted actions. Each action type also has a 15-minute per-Operator and server-wide Operator cooldown. An Administrator must explicitly reset an exhausted allowance. These limits and all authorization decisions are enforced by the privileged Management Agent; hiding a WebUI button is never the security boundary.
+
 ## Local network access
 
 JustVoxel WebUI is designed for simple administration from a trusted local home network. By default, Web management uses plain HTTP on port `8099` so the appliance can be opened directly from its local IP address without requiring users to install a private certificate or bypass browser certificate warnings.
