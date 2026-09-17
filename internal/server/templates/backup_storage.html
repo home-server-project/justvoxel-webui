@@ -3,7 +3,7 @@
 <body class="role-administrator">{{template "app-header" .}}
 <main>
   <div class="title-row"><div><p class="eyebrow">Administrator</p><h1>Backup storage</h1></div><span class="badge">{{.Identity.Username}}</span></div>
-  <p class="muted">Choose where JustVoxel stores manual and automatic backups. This phase only adopts safe existing storage or network shares; it never erases or formats a disk.</p>
+  <p class="muted">Choose where JustVoxel stores manual and automatic backups. This page uses existing safe storage or network shares. To erase a dedicated disk, format a blank partition, or create a partition in unallocated space, use Advanced storage.</p>
   {{if .Message}}<div class="notice success">{{.Message}}</div>{{end}}
   {{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}
 
@@ -34,7 +34,7 @@
           <option value="nfs" {{if eq .Form.Type "nfs"}}selected{{end}}>NFS network share</option>
           <option value="smb" {{if eq .Form.Type "smb"}}selected{{end}}>SMB / CIFS network share</option>
         </select>
-        <span class="field-help">Choose an existing safe destination. Whole-disk erase, formatting and partition creation are intentionally not available in A3.1.</span>
+        <span class="field-help">Choose an existing safe destination. New disk formatting and partition creation are available separately under <a href="/settings/storage-provision">Advanced storage</a>.</span>
       </label>
     </section>
 
@@ -69,7 +69,7 @@
       {{else}}
       <div class="notice">No existing writable XFS, ext4 or Btrfs partition is currently available for safe adoption.</div>
       {{end}}
-      <p class="muted compact">An unformatted partition is not formatted here. Advanced storage provisioning in A3.2 will handle formatting with a separate destructive confirmation.</p>
+      <p class="muted compact">If the partition is blank and needs a filesystem, use <a href="/settings/storage-provision">Advanced storage</a>. JustVoxel will show the exact partition and required FORMAT confirmation before writing it.</p>
     </section>
 
     <section class="panel details storage-kind" data-storage-kind="nfs">
@@ -157,10 +157,10 @@
   {{end}}
 
   <section class="panel details destructive-preview">
-    <div class="section-heading"><div><p class="eyebrow">Advanced storage · later</p><h2>Destructive actions are intentionally separate</h2></div></div>
-    <p>Formatting, whole-disk erase and creating a partition from unallocated space are not available on this page. In A3.2, JustVoxel will show the exact disk or partition and a clearly highlighted exact phrase before anything destructive can run.</p>
-    <div class="confirmation-example"><span>Example confirmation shown to the Administrator</span><code>ERASE /dev/sdb</code></div>
-    <p class="muted compact">The phrase will always be generated from the exact device selected on the review screen; the user will not have to guess what to type.</p>
+    <div class="section-heading"><div><p class="eyebrow">Advanced local storage</p><h2>Need to prepare a new disk or partition?</h2></div></div>
+    <p>Advanced storage can erase a dedicated whole disk, format a currently blank partition, or create a new partition only in already-unallocated space. Each operation shows the exact selected device, disk model, size, planned change, and the exact typed confirmation phrase before Apply.</p>
+    <div class="confirmation-example"><span>Example only — the real page uses the selected device</span><code>ERASE /dev/sdb</code></div>
+    <div class="action-row"><a class="button-link" href="/settings/storage-provision">Open Advanced storage</a></div>
   </section>
   {{else}}
   <div class="notice">Minecraft is not configured yet. Backup storage changes are handled by the first-run setup wizard in Phase A4.</div>
