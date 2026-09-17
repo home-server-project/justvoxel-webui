@@ -99,12 +99,14 @@
       <p>Running a Minecraft server requires agreement to the Minecraft End User License Agreement. <a href="{{.EULAURL}}" target="_blank" rel="noopener noreferrer">Read the official Minecraft EULA</a>.</p>
       <form method="post" action="/setup/review/eula">
         <input type="hidden" name="csrf" value="{{.CSRF}}">
-        <label class="setup-choice setup-eula-choice"><input type="checkbox" name="eula_accepted" {{if .EULAAccepted}}checked{{end}}><span><strong>I agree to the Minecraft End User License Agreement</strong><small>This records acceptance only for the current first-run setup session. It does not configure or start Minecraft.</small></span></label>
+        <input type="hidden" name="plan_fingerprint" value="{{.Plan.PlanFingerprint}}">
+        <label class="setup-choice setup-eula-choice"><input type="checkbox" name="eula_accepted" {{if .EULAAccepted}}checked{{end}}><span><strong>I agree to the Minecraft End User License Agreement</strong><small>This records acceptance only for the exact validated plan shown on this page. It does not configure or start Minecraft.</small></span></label>
         <div class="setup-primary-action"><button type="submit">{{if .EULAAccepted}}EULA accepted{{else}}Accept EULA{{end}}</button></div>
       </form>
-      {{if .EULAAccepted}}<div class="notice setup-safe-note"><strong>Ready for the next phase.</strong><span>Configuration is validated and EULA acceptance is recorded for this setup session.</span></div>{{end}}
+      {{if .EULAAccepted}}<div class="notice setup-safe-note"><strong>Ready for the next phase.</strong><span>Configuration is validated and EULA acceptance is bound to this exact reviewed plan.</span></div>{{end}}
     </section>
 
+    {{if .ShortPlanReference}}<p class="muted compact">Validated plan: <code>{{.ShortPlanReference}}</code></p>{{end}}
     <div class="setup-execution-placeholder">
       <strong>Configure JustVoxel</strong>
       <span>Setup execution will be enabled by the transactional setup engine. A4.4 does not modify the appliance.</span>
