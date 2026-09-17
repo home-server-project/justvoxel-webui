@@ -1,0 +1,101 @@
+{{define "setup_wizard.html"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>JustVoxel - First setup</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/setup.css">
+</head>
+<body class="role-administrator setup-body">
+<header class="setup-header">
+  <a class="brand-link" href="/setup" aria-current="page" aria-label="JustVoxel first setup"><strong>JustVoxel</strong><span>Minecraft Server Appliance</span></a>
+  <form class="nav-logout" method="post" action="/logout">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button class="secondary" type="submit">Log out</button>
+  </form>
+</header>
+<main class="setup-shell">
+  {{if not .Started}}
+  <section class="panel setup-welcome">
+    <p class="eyebrow">First setup</p>
+    <h1>Welcome to JustVoxel</h1>
+    <p class="setup-lead">Your Minecraft server has not been configured yet. This guided setup will collect the server, Minecraft, storage and backup choices before anything is applied.</p>
+    <div class="notice setup-safe-note">
+      <strong>Safe to explore.</strong>
+      <span>Moving through setup does not change Minecraft or storage. The final configuration will be reviewed before it can be applied.</span>
+    </div>
+
+    <ol class="setup-overview" aria-label="Setup steps">
+      {{range .Steps}}
+      <li><span class="setup-number">{{.Number}}</span><div><strong>{{.Name}}</strong><span>{{.Description}}</span></div></li>
+      {{end}}
+    </ol>
+
+    <div class="setup-actions">
+      <form method="post" action="/setup/start">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <button type="submit">Start setup</button>
+      </form>
+    </div>
+    <p class="muted compact">Prefer the terminal? <code>mjust setup</code> remains available from a local console or SSH.</p>
+  </section>
+  {{else}}
+  <div class="title-row setup-title-row">
+    <div><p class="eyebrow">First setup</p><h1>Set up JustVoxel</h1></div>
+    <span class="badge">Step {{.CurrentStep}} of 5</span>
+  </div>
+
+  <ol class="setup-progress" aria-label="Setup progress">
+    {{range .Steps}}
+    <li class="{{if .Active}}active{{end}} {{if .Complete}}complete{{end}}" {{if .Active}}aria-current="step"{{end}}>
+      <span class="setup-number">{{.Number}}</span>
+      <span>{{.Name}}</span>
+    </li>
+    {{end}}
+  </ol>
+
+  <section class="panel setup-step-panel">
+    <p class="eyebrow">Step {{.Current.Number}}</p>
+    <h2>{{.Current.Name}}</h2>
+    <p class="setup-lead">{{.Current.Description}}</p>
+    <div class="notice setup-safe-note">
+      <strong>No changes have been applied.</strong>
+      <span>This wizard stores only a temporary draft for your current Administrator session. Refreshing this page keeps your place; Cancel discards the draft.</span>
+    </div>
+
+    <div class="setup-placeholder">
+      <strong>{{.Current.Name}} configuration</strong>
+      <span>The controls for this step are added in the next setup phases. A4.1 establishes the navigation and safe first-run state only.</span>
+    </div>
+
+    <div class="setup-actions setup-actions-split">
+      <form method="post" action="/setup/cancel">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <button class="secondary" type="submit">Cancel setup</button>
+      </form>
+      <div class="setup-navigation">
+        {{if .CanBack}}
+        <form method="post" action="/setup/navigate">
+          <input type="hidden" name="csrf" value="{{.CSRF}}">
+          <input type="hidden" name="direction" value="back">
+          <button class="secondary" type="submit">Back</button>
+        </form>
+        {{end}}
+        {{if .CanNext}}
+        <form method="post" action="/setup/navigate">
+          <input type="hidden" name="csrf" value="{{.CSRF}}">
+          <input type="hidden" name="direction" value="next">
+          <button type="submit">Next</button>
+        </form>
+        {{else}}
+        <button type="button" disabled>Apply unavailable</button>
+        {{end}}
+      </div>
+    </div>
+  </section>
+  {{end}}
+  <p class="disclaimer">NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.</p>
+</main>
+</body>
+</html>{{end}}
