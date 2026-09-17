@@ -18,7 +18,15 @@ jobs:
           check-latest: true
       - name: Format check
         shell: bash
-        run: test -z "$(gofmt -l .)"
+        run: |
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            printf '%s\n' "$files"
+            for file in $files; do
+              gofmt -d "$file" || true
+            done
+            exit 1
+          fi
       - name: Vet
         run: go vet ./...
       - name: Test
