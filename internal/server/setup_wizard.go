@@ -50,7 +50,10 @@ type setupDraft struct {
 	CurrentStep int
 	Server      setupServerDraft
 	Minecraft   setupMinecraftDraft
+	Storage     setupStorageDraft
+	Backups     setupBackupDraft
 	Defaults    api.AdminSetupDefaults
+	Inventory   api.AdminStorageDiscovery
 	UpdatedAt   time.Time
 }
 
@@ -84,6 +87,10 @@ type setupWizardPageData struct {
 	Error                    string
 	Server                   setupServerDraft
 	Minecraft                setupMinecraftDraft
+	Storage                  setupStorageDraft
+	Backups                  setupBackupDraft
+	Filesystems              []setupFilesystemView
+	SameDiskWarning          string
 	Defaults                 api.AdminSetupDefaults
 	SystemMemory             string
 	SystemReserveMinimum     string
@@ -93,8 +100,8 @@ type setupWizardPageData struct {
 var setupWizardSteps = []setupWizardStepView{
 	{Number: 1, Name: "Server", Description: "Choose the server welcome message, player limit, Bedrock cross-play and timezone."},
 	{Number: 2, Name: "Minecraft", Description: "Choose Minecraft memory, ports, container channel and version policy."},
-	{Number: 3, Name: "Storage", Description: "Minecraft data storage will be selected here."},
-	{Number: 4, Name: "Backups", Description: "Backup location, retention and schedule will be configured here."},
+	{Number: 3, Name: "Storage", Description: "Choose where Minecraft worlds, configuration and server data will live."},
+	{Number: 4, Name: "Backups", Description: "Choose backup location, retention and automatic backup schedule."},
 	{Number: 5, Name: "Review", Description: "The complete setup plan and Minecraft EULA acceptance will be reviewed here before any changes are applied."},
 }
 
@@ -105,16 +112,25 @@ func (a *App) registerSetupWizardRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /setup/minecraft", a.setupWizardSaveMinecraft)
 	mux.HandleFunc("POST /setup/navigate", a.setupWizardNavigate)
 	mux.HandleFunc("POST /setup/cancel", a.setupWizardCancel)
+	a.registerSetupWizardStorageRoutes(mux)
 }
 
 func (a *App) setupWizardPage(w http.ResponseWriter, r *http.Request) {
-	session, _, identity, ok := a.setupWizardRequest(w, r, false)
+	session, client, identity, ok := a.setupWizardRequest(w, r, false)
 	if !ok {
 		return
 	}
 	draft, exists := firstRunSetupDrafts.get(a, session)
 	if !exists {
 		draft = setupDraft{}
+	} else if draft.Started && (draft.CurrentStep == 3 || draft.CurrentStep == 4) {
+		storage, err := client.AdminStorage(r.Context(), session)
+		if err != nil {
+			a.handleAdminDiscoveryError(w, r, err)
+			return
+		}
+		draft.Inventory = storage
+		firstRunSetupDrafts.save(a, session, draft)
 	}
 	a.renderSetupWizard(w, identity, draft, csrfFromRequest(r), "")
 }
@@ -129,7 +145,12 @@ func (a *App) setupWizardStart(w http.ResponseWriter, r *http.Request) {
 		a.handleAdminDiscoveryError(w, r, err)
 		return
 	}
-	firstRunSetupDrafts.start(a, session, normalizedSetupDefaults(defaults))
+	storage, err := client.AdminStorage(r.Context(), session)
+	if err != nil {
+		a.handleAdminDiscoveryError(w, r, err)
+		return
+	}
+	firstRunSetupDrafts.start(a, session, normalizedSetupDefaults(defaults), storage)
 	http.Redirect(w, r, "/setup", http.StatusSeeOther)
 }
 
@@ -278,7 +299,8 @@ func (a *App) renderSetupWizard(w http.ResponseWriter, identity api.SessionInfo,
 		Title: "First setup", Version: a.config.Version, ManagementAPI: a.config.ManagementAPI,
 		CSRF: csrf, Identity: identity, Started: draft.Started, CurrentStep: draft.CurrentStep,
 		Current: current, Steps: steps, Error: errorMessage,
-		Server: draft.Server, Minecraft: draft.Minecraft, Defaults: draft.Defaults,
+		Server: draft.Server, Minecraft: draft.Minecraft, Storage: draft.Storage, Backups: draft.Backups,
+		Filesystems: setupFilesystemViews(draft.Inventory), SameDiskWarning: setupSameDiskWarning(draft), Defaults: draft.Defaults,
 		SystemMemory:             formatMemoryMiB(draft.Defaults.SystemMemoryMiB),
 		SystemReserveMinimum:     formatMemoryMiB(draft.Defaults.SystemReserveMinimumMiB),
 		SystemReserveRecommended: formatMemoryMiB(draft.Defaults.SystemReserveRecommendedMiB),
@@ -289,6 +311,12 @@ func (a *App) renderSetupWizard(w http.ResponseWriter, identity api.SessionInfo,
 }
 
 func normalizedSetupDefaults(defaults api.AdminSetupDefaults) api.AdminSetupDefaults {
+	if defaults.DataPath == "" {
+		defaults.DataPath = "/var/lib/justvoxel/minecraft"
+	}
+	if defaults.BackupPath == "" {
+		defaults.BackupPath = "/var/lib/justvoxel/backups"
+	}
 	if defaults.JavaMemory == "" {
 		defaults.JavaMemory = "4G"
 	}
@@ -313,6 +341,12 @@ func normalizedSetupDefaults(defaults api.AdminSetupDefaults) api.AdminSetupDefa
 	if defaults.ImageTag == "" {
 		defaults.ImageTag = "stable"
 	}
+	if defaults.BackupKeep == 0 {
+		defaults.BackupKeep = 7
+	}
+	if defaults.BackupDailyTime == "" {
+		defaults.BackupDailyTime = "04:30"
+	}
 	if defaults.SystemReserveMinimumMiB == 0 {
 		defaults.SystemReserveMinimumMiB = 1024
 	}
@@ -322,7 +356,7 @@ func normalizedSetupDefaults(defaults api.AdminSetupDefaults) api.AdminSetupDefa
 	return defaults
 }
 
-func draftFromSetupDefaults(defaults api.AdminSetupDefaults) setupDraft {
+func draftFromSetupDefaults(defaults api.AdminSetupDefaults, inventory api.AdminStorageDiscovery) setupDraft {
 	defaults = normalizedSetupDefaults(defaults)
 	policy := defaults.VersionMode
 	if policy != "latest" {
@@ -335,7 +369,7 @@ func draftFromSetupDefaults(defaults api.AdminSetupDefaults) setupDraft {
 		version = "LATEST"
 	}
 	return setupDraft{
-		Started: true, CurrentStep: 1, Defaults: defaults,
+		Started: true, CurrentStep: 1, Defaults: defaults, Inventory: inventory,
 		Server: setupServerDraft{
 			MOTD: defaults.MOTD, MaxPlayers: strconv.Itoa(defaults.MaxPlayers),
 			BedrockEnabled: defaults.BedrockEnabled, Timezone: defaults.Timezone,
@@ -345,6 +379,8 @@ func draftFromSetupDefaults(defaults api.AdminSetupDefaults) setupDraft {
 			JavaPort: strconv.Itoa(defaults.JavaPort), BedrockPort: strconv.Itoa(defaults.BedrockPort),
 			ImageTag: defaults.ImageTag, VersionPolicy: policy, Version: version,
 		},
+		Storage: initialSetupStorageDraft(defaults),
+		Backups: initialSetupBackupDraft(defaults),
 	}
 }
 
@@ -445,13 +481,13 @@ func (s *setupDraftStore) get(app *App, session string) (setupDraft, bool) {
 	return draft, ok
 }
 
-func (s *setupDraftStore) start(app *App, session string, defaults api.AdminSetupDefaults) {
+func (s *setupDraftStore) start(app *App, session string, defaults api.AdminSetupDefaults, inventory api.AdminStorageDiscovery) {
 	now := time.Now()
 	key := setupKey(app, session)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pruneLocked(now)
-	draft := draftFromSetupDefaults(defaults)
+	draft := draftFromSetupDefaults(defaults, inventory)
 	draft.UpdatedAt = now
 	s.drafts[key] = draft
 }
@@ -478,13 +514,10 @@ func (s *setupDraftStore) navigate(app *App, session, direction string) bool {
 	}
 	switch direction {
 	case "next":
-		// Server and Minecraft have real forms in A4.2 and cannot be skipped
-		// through the generic navigation endpoint.
-		if draft.CurrentStep <= 2 {
+		// Steps 1-4 have real forms and cannot be skipped through the generic
+		// navigation endpoint. Review remains read-only until A4.4.
+		if draft.CurrentStep <= 4 {
 			return false
-		}
-		if draft.CurrentStep < len(setupWizardSteps) {
-			draft.CurrentStep++
 		}
 	case "back":
 		if draft.CurrentStep > 1 {
