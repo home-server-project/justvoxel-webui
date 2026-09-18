@@ -72,6 +72,31 @@ func TestAdminSetupApplyClientContract(t *testing.T) {
 	}
 }
 
+func TestAdminSetupApplyClientCarriesSMBPasswordOnlyWhenProvided(t *testing.T) {
+	client := &Client{http: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(body), `"smb_password":"super-secret"`) {
+			t.Fatalf("SMB execution secret missing from apply payload: %s", body)
+		}
+		return &http.Response{
+			StatusCode: http.StatusAccepted,
+			Body: io.NopCloser(strings.NewReader(`{"ok":true,"created":true,"operation":{"schema_version":"v1","operation_id":"` + setupApplyTestOperationID + `","operation_type":"setup","plan_fingerprint":"` + setupPlanTestFingerprint + `","state":"queued","stage":"queued","status":"Setup operation queued.","started_at":"2026-09-17T20:00:00Z","updated_at":"2026-09-17T20:00:00Z","rollback":{"state":"not_started"}}}`)),
+			Header: make(http.Header),
+		}, nil
+	})}}
+	_, err := client.AdminSetupApply(context.Background(), "session-token", AdminSetupApplyRequest{
+		PlanFingerprint: setupPlanTestFingerprint,
+		Request:         setupPlanTestRequest(),
+		SMBPassword:     "super-secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAdminSetupApplyPreservesStalePlanConflict(t *testing.T) {
 	client := &Client{http: &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
 		return &http.Response{
