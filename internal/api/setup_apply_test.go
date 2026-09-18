@@ -94,7 +94,6 @@ func TestAdminSetupApplyClientCarriesSMBPasswordOnlyWhenProvided(t *testing.T) {
 		Request:         setupPlanTestRequest(),
 		EULAAccepted:    true,
 		SMBPassword:     "super-secret",
-		EULAAccepted:    true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -156,7 +155,7 @@ func TestAdminSetupApplyResponseIsStrictAndBounded(t *testing.T) {
 		if _, err := client.AdminSetupApply(context.Background(), "session-token", AdminSetupApplyRequest{
 			PlanFingerprint: setupPlanTestFingerprint,
 			Request:         setupPlanTestRequest(),
-		EULAAccepted:    true,
+			EULAAccepted:    true,
 		}); err == nil {
 			t.Fatalf("invalid response unexpectedly accepted: %s", body)
 		}
