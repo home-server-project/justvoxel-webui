@@ -22,6 +22,7 @@ var (
 type AdminSetupApplyRequest struct {
 	PlanFingerprint string                `json:"plan_fingerprint"`
 	Request         AdminSetupPlanRequest `json:"request"`
+	SMBPassword     string                `json:"smb_password,omitempty"`
 }
 
 type AdminSetupApplyResponse struct {
