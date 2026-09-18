@@ -94,7 +94,7 @@ func TestAdminSetupPlanClientContract(t *testing.T) {
 				"plan_fingerprint":"` + setupPlanTestFingerprint + `",
 				"normalized":{
 					"server":{"motd":"Family Minecraft","max_players":10,"bedrock_enabled":true,"timezone":"America/Toronto"},
-					"minecraft":{"java_memory":"6G","container_memory":"8G","java_port":25565,"bedrock_port":19132,"image_tag":"stable","requested_version_policy":"recommended","version_policy":"pinned","version":"1.21.8","system_memory_mib":16384,"system_reserve_mib":8192},
+					"minecraft":{"java_memory":"6G","container_memory":"8G","java_port":25565,"bedrock_port":19132,"image_tag":"stable","requested_version_policy":"recommended","version_policy":"pinned","version":"1.21.8","system_memory_mib":16384,"system_reserve_mib":8192,"minecraft_uid":1000,"minecraft_gid":1000},
 					"storage":{"type":"partition","path":"/var/mnt/justvoxel-data/minecraft","device":"/dev/vdb1","parent_disk":"/dev/vdb","model":"Virtual Disk","transport":"virtio","size_bytes":10737418240,"filesystem":"xfs","uuid":"data-uuid","mount_point":"/var/mnt/justvoxel-data","expected_uuid":"data-uuid","expected_source":"","mounted_at":"","source":"","system_disk":false,"purpose":"data"},
 					"backups":{"type":"smb","path":"/var/mnt/justvoxel-backup/backups","device":"","parent_disk":"","model":"","transport":"","size_bytes":0,"filesystem":"","uuid":"","mount_point":"/var/mnt/justvoxel-backup","expected_uuid":"","expected_source":"//nas/minecraft-backups","mounted_at":"","source":"//nas/minecraft-backups","system_disk":false,"purpose":"","username":"backup-user","domain":"HOME","credentials_required":true,"automatic":true,"daily_time":"04:30","schedule":"*-*-* 04:30:00","keep":7}
 				},
@@ -117,6 +117,9 @@ func TestAdminSetupPlanClientContract(t *testing.T) {
 	}
 	if plan.Normalized.Minecraft.VersionPolicy != "pinned" || plan.Normalized.Minecraft.Version != "1.21.8" {
 		t.Fatalf("normalized Minecraft policy not preserved: %#v", plan.Normalized.Minecraft)
+	}
+	if plan.Normalized.Minecraft.MinecraftUID != 1000 || plan.Normalized.Minecraft.MinecraftGID != 1000 {
+		t.Fatalf("normalized Minecraft runtime identity not preserved: %#v", plan.Normalized.Minecraft)
 	}
 	if plan.Normalized.Storage.ExpectedUUID != "data-uuid" {
 		t.Fatalf("normalized storage identity missing: %#v", plan.Normalized.Storage)
