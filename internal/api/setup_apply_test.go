@@ -41,7 +41,7 @@ func TestAdminSetupApplyClientContract(t *testing.T) {
 		}
 		return &http.Response{
 			StatusCode: http.StatusAccepted,
-			Body:       io.NopCloser(strings.NewReader(`{
+			Body: io.NopCloser(strings.NewReader(`{
 				"ok":true,
 				"created":true,
 				"operation":{
@@ -57,7 +57,7 @@ func TestAdminSetupApplyClientContract(t *testing.T) {
 					"rollback":{"state":"not_started"}
 				}
 			}`)),
-			Header:     make(http.Header),
+			Header: make(http.Header),
 		}, nil
 	})}}
 
