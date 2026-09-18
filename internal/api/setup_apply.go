@@ -23,6 +23,7 @@ type AdminSetupApplyRequest struct {
 	PlanFingerprint string                `json:"plan_fingerprint"`
 	Request         AdminSetupPlanRequest `json:"request"`
 	SMBPassword     string                `json:"smb_password,omitempty"`
+	EULAAccepted    bool                  `json:"eula_accepted"`
 }
 
 type AdminSetupApplyResponse struct {
