@@ -30,6 +30,7 @@ func TestAdminSetupApplyClientContract(t *testing.T) {
 			`"version_policy":"recommended"`,
 			`"source":"//nas/minecraft-backups"`,
 			`"username":"backup-user"`,
+			`"eula_accepted":true`,
 		} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("apply request missing %s: %s", want, text)
@@ -63,6 +64,7 @@ func TestAdminSetupApplyClientContract(t *testing.T) {
 	out, err := client.AdminSetupApply(context.Background(), "session-token", AdminSetupApplyRequest{
 		PlanFingerprint: setupPlanTestFingerprint,
 		Request:         setupPlanTestRequest(),
+		EULAAccepted:    true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +92,9 @@ func TestAdminSetupApplyClientCarriesSMBPasswordOnlyWhenProvided(t *testing.T) {
 	_, err := client.AdminSetupApply(context.Background(), "session-token", AdminSetupApplyRequest{
 		PlanFingerprint: setupPlanTestFingerprint,
 		Request:         setupPlanTestRequest(),
+		EULAAccepted:    true,
 		SMBPassword:     "super-secret",
+		EULAAccepted:    true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -109,6 +113,7 @@ func TestAdminSetupApplyPreservesStalePlanConflict(t *testing.T) {
 	out, err := client.AdminSetupApply(context.Background(), "session-token", AdminSetupApplyRequest{
 		PlanFingerprint: setupPlanTestFingerprint,
 		Request:         setupPlanTestRequest(),
+		EULAAccepted:    true,
 	})
 	if err == nil {
 		t.Fatal("expected stale-plan error")
@@ -131,6 +136,7 @@ func TestAdminSetupApplyRejectsInvalidFingerprintBeforeRequest(t *testing.T) {
 	_, err := client.AdminSetupApply(context.Background(), "session-token", AdminSetupApplyRequest{
 		PlanFingerprint: "not-a-fingerprint",
 		Request:         setupPlanTestRequest(),
+		EULAAccepted:    true,
 	})
 	if err == nil || called {
 		t.Fatalf("invalid fingerprint err=%v transport_called=%t", err, called)
@@ -150,6 +156,7 @@ func TestAdminSetupApplyResponseIsStrictAndBounded(t *testing.T) {
 		if _, err := client.AdminSetupApply(context.Background(), "session-token", AdminSetupApplyRequest{
 			PlanFingerprint: setupPlanTestFingerprint,
 			Request:         setupPlanTestRequest(),
+		EULAAccepted:    true,
 		}); err == nil {
 			t.Fatalf("invalid response unexpectedly accepted: %s", body)
 		}
