@@ -117,6 +117,7 @@ func TestAdminSetupApplyResponseIsStrictAndBounded(t *testing.T) {
 		`{"ok":false,"code":"stale_plan","error":"stale","created":false,"unexpected":true}`,
 		`{"ok":false,"code":"stale_plan","error":"stale","created":false} {}`,
 		`{"ok":true,"created":true,"operation":{"schema_version":"v1","operation_id":"bad","operation_type":"setup","plan_fingerprint":"` + setupPlanTestFingerprint + `","state":"queued","stage":"queued","status":"queued","started_at":"x","updated_at":"x","rollback":{"state":"not_started"}}}`,
+		`{"ok":false,"code":"error","error":"` + strings.Repeat("x", 40*1024) + `","created":false}`,
 	} {
 		client := &Client{http: &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: http.StatusAccepted, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
