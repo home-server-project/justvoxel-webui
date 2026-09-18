@@ -41,7 +41,7 @@ func TestAdminSetupApplyClientContract(t *testing.T) {
 		}
 		return &http.Response{
 			StatusCode: http.StatusAccepted,
-			Body: io.NopCloser(strings.NewReader(`{
+			Body:       io.NopCloser(strings.NewReader(`{
 				"ok":true,
 				"created":true,
 				"operation":{
@@ -57,7 +57,7 @@ func TestAdminSetupApplyClientContract(t *testing.T) {
 					"rollback":{"state":"not_started"}
 				}
 			}`)),
-			Header: make(http.Header),
+			Header:     make(http.Header),
 		}, nil
 	})}}
 
@@ -85,8 +85,8 @@ func TestAdminSetupApplyClientCarriesSMBPasswordOnlyWhenProvided(t *testing.T) {
 		}
 		return &http.Response{
 			StatusCode: http.StatusAccepted,
-			Body: io.NopCloser(strings.NewReader(`{"ok":true,"created":true,"operation":{"schema_version":"v1","operation_id":"` + setupApplyTestOperationID + `","operation_type":"setup","plan_fingerprint":"` + setupPlanTestFingerprint + `","state":"queued","stage":"queued","status":"Setup operation queued.","started_at":"2026-09-17T20:00:00Z","updated_at":"2026-09-17T20:00:00Z","rollback":{"state":"not_started"}}}`)),
-			Header: make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"ok":true,"created":true,"operation":{"schema_version":"v1","operation_id":"` + setupApplyTestOperationID + `","operation_type":"setup","plan_fingerprint":"` + setupPlanTestFingerprint + `","state":"queued","stage":"queued","status":"Setup operation queued.","started_at":"2026-09-17T20:00:00Z","updated_at":"2026-09-17T20:00:00Z","rollback":{"state":"not_started"}}}`)),
+			Header:     make(http.Header),
 		}, nil
 	})}}
 	_, err := client.AdminSetupApply(context.Background(), "session-token", AdminSetupApplyRequest{
@@ -104,8 +104,8 @@ func TestAdminSetupApplyPreservesStalePlanConflict(t *testing.T) {
 	client := &Client{http: &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusConflict,
-			Body: io.NopCloser(strings.NewReader(`{"ok":false,"code":"stale_plan","error":"the reviewed setup has changed; return to Review before configuring","created":false}`)),
-			Header: make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"ok":false,"code":"stale_plan","error":"the reviewed setup has changed; return to Review before configuring","created":false}`)),
+			Header:     make(http.Header),
 		}, nil
 	})}}
 
