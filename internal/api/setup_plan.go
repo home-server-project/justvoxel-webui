@@ -82,6 +82,8 @@ type AdminSetupPlanMinecraft struct {
 	Version                string `json:"version"`
 	SystemMemoryMiB        int    `json:"system_memory_mib"`
 	SystemReserveMiB       int    `json:"system_reserve_mib"`
+	MinecraftUID           uint32 `json:"minecraft_uid"`
+	MinecraftGID           uint32 `json:"minecraft_gid"`
 }
 
 type AdminSetupPlanStorage struct {
